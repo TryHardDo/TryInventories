@@ -54,7 +54,7 @@ public class InventoryApiController : Controller
         if (startAssetId != null) uriBuilder.Append($"&start_assetid={startAssetId}");
 
         const int maxRetry = 5;
-        var retryCooldown = 100;
+        var retryCooldown = 500;
         for (var retry = 1; maxRetry > retry; retry++)
             try
             {
