@@ -21,6 +21,7 @@ public class AppOptions
     public int ProxyPort { get; set; } = 8080;
     public bool UseAuthorization { get; set; } = true;
     public ProxyAccess ProxyAccess { get; set; } = new();
+    public string AccessKey { get; set; } = "place_some_api_key_here";
 
     public override string ToString()
     {
