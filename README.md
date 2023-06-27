@@ -30,4 +30,5 @@ For Windows users, you can start the program using the `TryInventories.exe` exec
 To gracefully stop the app, press `CTRL + C` to exit.
 
 ## Note:
+### The documentation is not finished and there are lot of missing parts. If you have specific question please write me on discord! Username: *tryharddo*
 If you encounter any issue related to the software please open an **Issue** and describe the problem. I will try to fix it as soon as possible.
