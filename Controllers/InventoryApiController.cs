@@ -38,9 +38,9 @@ public class InventoryApiController : Controller
         _httpClient = new HttpClient(clientHandler);
     }
 
-    [HttpGet("{steamId}")]
+    [HttpGet("{steamId}/{appId}/{contextId}")]
     public async Task<ActionResult<object>> GetInventory(string apiKey, string steamId, int appId = 440,
-        int contextId = 2, string? startAssetId = null)
+        int contextId = 2, [FromQuery(Name = "start_assetid")] string? startAssetId = null)
     {
         if (string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey)
             return Unauthorized($"Parameter {nameof(apiKey)} is invalid!");
