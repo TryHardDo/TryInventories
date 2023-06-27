@@ -42,7 +42,7 @@ internal class Program
 
         app.UseRequestLogger();
 
-        app.UseHttpsRedirection();
+        //app.UseHttpsRedirection();
 
         app.UseAuthorization();
 
