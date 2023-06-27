@@ -42,10 +42,10 @@ public class InventoryApiController : Controller
     public async Task<ActionResult<object>> GetInventory(string apiKey, string steamId, int appId = 440,
         int contextId = 2, string? startAssetId = null)
     {
-        if (string.IsNullOrEmpty(apiKey)) return BadRequest("Api key can't be null or empty!");
+        if (string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey) return Unauthorized($"Parameter {nameof(apiKey)} is invalid!");
 
         if (string.IsNullOrEmpty(steamId))
-            return BadRequest("You forgot to include the requested user's steam id!");
+            return BadRequest($"Parameter {nameof(steamId)} is invalid!");
 
         var uriBuilder =
             new StringBuilder(
