@@ -41,7 +41,8 @@ public class SteamProxy
     {
         _logger.LogInformation("Getting WebShare profile details...");
         var profileData = GetWebShareProfileDetails().Result;
-        _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id, profileData.FirstName, profileData.LastName, profileData.Email);
+        _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
+            profileData.FirstName, profileData.LastName, profileData.Email);
 
         _logger.LogInformation("Loading proxies...");
         LoadProxies().Wait();
@@ -129,7 +130,8 @@ public class SteamProxy
         rsp.EnsureSuccessStatusCode();
 
         var content = await rsp.Content.ReadAsStringAsync();
-        var json = JsonSerializer.Deserialize<ProfileResponse>(content) ?? throw new JsonException("Failed to deserialize the response from WebShare API!");
+        var json = JsonSerializer.Deserialize<ProfileResponse>(content) ??
+                   throw new JsonException("Failed to deserialize the response from WebShare API!");
 
         return json;
     }
