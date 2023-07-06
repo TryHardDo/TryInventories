@@ -39,6 +39,10 @@ public class SteamProxy
 
     public void Init()
     {
+        _logger.LogInformation("Getting WebShare profile details...");
+        var profileData = GetWebShareProfileDetails().Result;
+        _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id, profileData.FirstName, profileData.LastName, profileData.Email);
+
         _logger.LogInformation("Loading proxies...");
         LoadProxies().Wait();
 
@@ -73,6 +77,12 @@ public class SteamProxy
                 _logger.LogError("Failed to retrieve a proxy list chunk from WebShare! Status: {status}",
                     rsp.StatusCode);
 
+                if (ex.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogError("Api credentials are incorrect!");
+                    return;
+                }
+
                 if (max < retries)
                 {
                     _logger.LogInformation("(Attempt: {retries}) Retrying in {cooldown} seconds...", retries,
@@ -103,11 +113,25 @@ public class SteamProxy
 
     public async Task RefreshProxyList()
     {
-        var reqString = "https://proxy.webshare.io/api/v2/proxy/list/refresh/";
+        const string reqString = "https://proxy.webshare.io/api/v2/proxy/list/refresh/";
         var reqMsg = new HttpRequestMessage(HttpMethod.Post, reqString);
         var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
 
         rsp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<ProfileResponse> GetWebShareProfileDetails()
+    {
+        const string reqString = "https://proxy.webshare.io/api/v2/profile/";
+        var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
+        var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
+
+        rsp.EnsureSuccessStatusCode();
+
+        var content = await rsp.Content.ReadAsStringAsync();
+        var json = JsonSerializer.Deserialize<ProfileResponse>(content) ?? throw new JsonException("Failed to deserialize the response from WebShare API!");
+
+        return json;
     }
 
     public async Task<HttpResponseMessage> SendSelfRotatedProxiedMessage(HttpRequestMessage req)
@@ -136,7 +160,7 @@ public class SteamProxy
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Proxied call did not indicated success! Rotating proxy and retrying...");
+                _logger.LogWarning(ex, "Proxied call did not indicated success! Rotating proxy and retrying...");
 
                 RotateProxy();
                 rotated++;
@@ -173,6 +197,7 @@ public class SteamProxy
         };
 
         _proxyClient.Dispose();
+
         _proxyClient = new HttpClient(new HttpClientHandler
         {
             Proxy = proxy,
