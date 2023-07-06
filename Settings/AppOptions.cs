@@ -17,6 +17,8 @@ public class AppOptions
 {
     public const string Settings = "Settings";
 
+    public bool RotatingProxy { get; set; } = true;
+    public string WebShareApiKey { get; set; } = "webshare_api_key";
     public string ProxyHost { get; set; } = "http://something.com";
     public int ProxyPort { get; set; } = 8080;
     public bool UseAuthorization { get; set; } = true;
