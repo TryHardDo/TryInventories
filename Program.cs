@@ -28,6 +28,8 @@ internal class Program
 
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
 
+        builder.Services.AddSingleton<SteamProxy>();
+
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
@@ -47,6 +49,8 @@ internal class Program
         app.UseAuthorization();
 
         app.MapControllers();
+
+        app.Services.GetService<SteamProxy>().Init(); // Other solution?
 
         app.Run();
     }
