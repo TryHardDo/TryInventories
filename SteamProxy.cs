@@ -39,16 +39,49 @@ public class SteamProxy
 
     public void Init()
     {
-        _logger.LogInformation("Getting WebShare profile details...");
-        var profileData = GetWebShareProfileDetails().Result;
-        _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
-            profileData.FirstName, profileData.LastName, profileData.Email);
+        if (_appOptions.SelfRotatedProxy)
+        {
+            _logger.LogInformation("Mode: AutoRotated => Proxy rotation is handled by WebShare!");
+            var proxy = new WebProxy(_appOptions.ProxyHost, _appOptions.ProxyPort);
 
-        _logger.LogInformation("Loading proxies...");
-        LoadProxies().Wait();
+            if (_appOptions.UseAuthorization)
+            {
+                _logger.LogInformation("Using authorization for proxied requests...");
 
-        _logger.LogInformation("For initialization we rotate to the first proxy!");
-        RotateProxy(true);
+                proxy.Credentials = new NetworkCredential
+                {
+                    UserName = _appOptions.ProxyAccess.Username,
+                    Password = _appOptions.ProxyAccess.Password
+                };
+            }
+
+            _logger.LogDebug("Client handler reached!");
+            var clientHandler = new HttpClientHandler
+            {
+                Proxy = proxy,
+                PreAuthenticate = true,
+                UseCookies = false
+            };
+
+            _proxyClient = new HttpClient(clientHandler);
+            _logger.LogInformation("Initialization completed!");
+        }
+        else
+        {
+            _logger.LogInformation("Mode: SelfRotated => Proxy rotation is handled by the software!");
+
+            _logger.LogInformation("Getting WebShare profile details...");
+            var profileData = GetWebShareProfileDetails().Result;
+            _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
+                profileData.FirstName, profileData.LastName, profileData.Email);
+
+            _logger.LogInformation("Loading proxies...");
+            LoadProxies().Wait();
+
+            _logger.LogInformation("For initialization we rotate to the first proxy!");
+            RotateProxy(true);
+            _logger.LogInformation("Initialization completed!");
+        }
     }
 
     public async Task LoadProxies()
@@ -112,15 +145,6 @@ public class SteamProxy
             _proxyEntries.Count);
     }
 
-    public async Task RefreshProxyList()
-    {
-        const string reqString = "https://proxy.webshare.io/api/v2/proxy/list/refresh/";
-        var reqMsg = new HttpRequestMessage(HttpMethod.Post, reqString);
-        var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
-
-        rsp.EnsureSuccessStatusCode();
-    }
-
     public async Task<ProfileResponse> GetWebShareProfileDetails()
     {
         const string reqString = "https://proxy.webshare.io/api/v2/profile/";
@@ -134,6 +158,48 @@ public class SteamProxy
                    throw new JsonException("Failed to deserialize the response from WebShare API!");
 
         return json;
+    }
+
+    public async Task<HttpResponseMessage> SendAutoRotatedProxiedMessage(HttpRequestMessage req)
+    {
+        const int maxRetry = 10;
+        var attempt = 0;
+        const int delay = 1000;
+
+        HttpResponseMessage rsp;
+        do
+        {
+            var cloneReq = new HttpRequestMessage
+            {
+                Content = req.Content,
+                Method = req.Method,
+                Version = req.Version,
+                RequestUri = req.RequestUri,
+                VersionPolicy = req.VersionPolicy
+            };
+
+            rsp = await _proxyClient.SendAsync(cloneReq);
+
+            try
+            {
+                rsp.EnsureSuccessStatusCode();
+                break;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(ex, "Proxied call did not indicated success! Retrying call in {delay} second(s)...",
+                    delay / 1000);
+                attempt++;
+
+                await Task.Delay(delay);
+            }
+        } while (attempt < maxRetry);
+
+        if (attempt == maxRetry)
+            _logger.LogError(
+                "We have reached the maximum allowed retry count for this request! Returning last response message...");
+
+        return rsp;
     }
 
     public async Task<HttpResponseMessage> SendSelfRotatedProxiedMessage(HttpRequestMessage req)

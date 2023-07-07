@@ -50,9 +50,10 @@ public class InventoryApiController : Controller
             request.Headers.Accept.Clear();
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            using var response = !_options.RotatingProxy
+            // Using method based on settings
+            using var response = !_options.SelfRotatedProxy
                 ? await _steamProxy.SendSelfRotatedProxiedMessage(request)
-                : throw new NotImplementedException("Not yet implemented!");
+                : await _steamProxy.SendAutoRotatedProxiedMessage(request);
 
             response.EnsureSuccessStatusCode();
 
