@@ -10,7 +10,9 @@ TryInventories is an ASP.NET Core based RESTApi that communicates with Steam's i
 The `appsettings.json` file contains user settings located at the bottom:
 ```json
 "Settings": {
-    "ProxyHost": "http://something.com",
+    "RotatingProxy": false, // Use false
+    "WebShareApiKey": "", // Make an API key at https://proxy2.webshare.io/userapi/keys
+    "ProxyHost": "http://something.com", // Only if you want to use rotating proxy
     "ProxyPort": 8080,
     "UseAuthorization": true,
     "ProxyAccess": {
