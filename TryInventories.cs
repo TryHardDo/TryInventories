@@ -31,7 +31,14 @@ internal class TryInventories
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
 
         // WebShare client singleton service
-        builder.Services.AddSingleton<WebShareClient>();
+        builder.Services.AddSingleton(sp =>
+        {
+            var configuration = sp.GetRequiredService<IOptions<AppOptions>>();
+            var wc = new WebShareClient(configuration.Value.WebShareApiKey);
+
+            return wc;
+        });
+
 
         // Version checker singleton service
         builder.Services.AddSingleton(sp =>
