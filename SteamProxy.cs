@@ -30,7 +30,8 @@ public class SteamProxy
         {
             DefaultRequestHeaders =
             {
-                Authorization = new AuthenticationHeaderValue("Token", _appOptions.SelfRotatedProxySettings.WebShareApiKey)
+                Authorization =
+                    new AuthenticationHeaderValue("Token", _appOptions.SelfRotatedProxySettings.WebShareApiKey)
             }
         };
 
@@ -42,7 +43,8 @@ public class SteamProxy
         if (!_appOptions.SelfRotatedProxy)
         {
             _logger.LogInformation("Mode: AutoRotated => Proxy rotation is handled by WebShare!");
-            var proxy = new WebProxy(_appOptions.AutoRotatedProxySettings.ProxyHost, _appOptions.AutoRotatedProxySettings.ProxyPort);
+            var proxy = new WebProxy(_appOptions.AutoRotatedProxySettings.ProxyHost,
+                _appOptions.AutoRotatedProxySettings.ProxyPort);
 
             if (_appOptions.AutoRotatedProxySettings.UseAuthorization)
             {
