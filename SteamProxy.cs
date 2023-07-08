@@ -30,7 +30,7 @@ public class SteamProxy
         {
             DefaultRequestHeaders =
             {
-                Authorization = new AuthenticationHeaderValue("Token", _appOptions.WebShareApiKey)
+                Authorization = new AuthenticationHeaderValue("Token", _appOptions.SelfRotatedProxySettings.WebShareApiKey)
             }
         };
 
@@ -39,19 +39,19 @@ public class SteamProxy
 
     public void Init()
     {
-        if (_appOptions.SelfRotatedProxy)
+        if (!_appOptions.SelfRotatedProxy)
         {
             _logger.LogInformation("Mode: AutoRotated => Proxy rotation is handled by WebShare!");
-            var proxy = new WebProxy(_appOptions.ProxyHost, _appOptions.ProxyPort);
+            var proxy = new WebProxy(_appOptions.AutoRotatedProxySettings.ProxyHost, _appOptions.AutoRotatedProxySettings.ProxyPort);
 
-            if (_appOptions.UseAuthorization)
+            if (_appOptions.AutoRotatedProxySettings.UseAuthorization)
             {
                 _logger.LogInformation("Using authorization for proxied requests...");
 
                 proxy.Credentials = new NetworkCredential
                 {
-                    UserName = _appOptions.ProxyAccess.Username,
-                    Password = _appOptions.ProxyAccess.Password
+                    UserName = _appOptions.AutoRotatedProxySettings.AuthorizationCredentials.Username,
+                    Password = _appOptions.AutoRotatedProxySettings.AuthorizationCredentials.Password
                 };
             }
 
@@ -162,9 +162,9 @@ public class SteamProxy
 
     public async Task<HttpResponseMessage> SendAutoRotatedProxiedMessage(HttpRequestMessage req)
     {
-        const int maxRetry = 10;
+        var maxRetry = _appOptions.AutoRotatedProxySettings.MaxRetryPerRequest;
+        var delay = _appOptions.AutoRotatedProxySettings.RetryDelay;
         var attempt = 0;
-        const int delay = 1000;
 
         HttpResponseMessage rsp;
         do
@@ -204,7 +204,7 @@ public class SteamProxy
 
     public async Task<HttpResponseMessage> SendSelfRotatedProxiedMessage(HttpRequestMessage req)
     {
-        const int maxRotates = 10;
+        var maxRotates = _appOptions.SelfRotatedProxySettings.MaxRotatePerRequest;
         var rotated = 0;
 
         HttpResponseMessage rsp;

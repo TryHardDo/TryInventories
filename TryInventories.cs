@@ -34,7 +34,7 @@ internal class TryInventories
         builder.Services.AddSingleton(sp =>
         {
             var configuration = sp.GetRequiredService<IOptions<AppOptions>>();
-            var wc = new WebShareClient(configuration.Value.WebShareApiKey);
+            var wc = new WebShareClient(configuration.Value.SelfRotatedProxySettings.WebShareApiKey);
 
             return wc;
         });
