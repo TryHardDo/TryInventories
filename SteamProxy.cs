@@ -73,9 +73,18 @@ public class SteamProxy
             _logger.LogInformation("Mode: SelfRotated => Proxy rotation is handled by the software!");
 
             _logger.LogInformation("Getting WebShare profile details...");
-            var profileData = GetWebShareProfileDetails().Result;
-            _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
-                profileData.FirstName, profileData.LastName, profileData.Email);
+
+            try
+            {
+                var profileData = GetWebShareProfileDetails().Result;
+                _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
+                    profileData.FirstName, profileData.LastName, profileData.Email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve profile details! It mainly caused by the wrong API key. Please check it!");
+                return;
+            }
 
             _logger.LogInformation("Loading proxies...");
             LoadProxyPoolAsync().Wait();
