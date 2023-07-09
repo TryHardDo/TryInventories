@@ -10,7 +10,7 @@ namespace TryInventories;
 internal class TryInventories
 {
     internal const string Author = "Levai Levente @ TryHardDo";
-    internal static readonly Version Version = new(1, 1, 1);
+    internal static readonly Version Version = new(1, 1, 2);
 
     private static void Main(string[] args)
     {
@@ -38,7 +38,6 @@ internal class TryInventories
 
             return wc;
         });
-
 
         // Version checker singleton service
         builder.Services.AddSingleton(sp =>

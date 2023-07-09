@@ -44,6 +44,7 @@ public class AppOptions
     public const string Settings = "Settings";
 
     public bool SelfRotatedProxy { get; set; } = true;
+    public bool ShuffleProxyList { get; set; } = true;
     public SelfRotatedProxySettings SelfRotatedProxySettings { get; set; } = new();
     public AutoRotatedProxySettings AutoRotatedProxySettings { get; set; } = new();
     public string AccessKey { get; set; } = "place_some_api_key_here";
