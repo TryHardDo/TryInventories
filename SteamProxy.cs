@@ -82,7 +82,8 @@ public class SteamProxy
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to retrieve profile details! It mainly caused by the wrong API key. Please check it!");
+                _logger.LogError(ex,
+                    "Failed to retrieve profile details! It mainly caused by the wrong API key. Please check it!");
                 return;
             }
 

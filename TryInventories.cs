@@ -39,7 +39,6 @@ internal class TryInventories
             return wc;
         });
 
-
         // Version checker singleton service
         builder.Services.AddSingleton(sp =>
         {
