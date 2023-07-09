@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -11,38 +10,23 @@ namespace TryInventories.Controllers;
 [Route("inventory")]
 public class InventoryApiController : Controller
 {
-    private readonly HttpClient _httpClient;
     private readonly ILogger<InventoryApiController> _logger;
     private readonly AppOptions _options;
+    private readonly SteamProxy _steamProxy;
 
-    public InventoryApiController(ILogger<InventoryApiController> logger, IOptions<AppOptions> options)
+    public InventoryApiController(ILogger<InventoryApiController> logger, IOptions<AppOptions> options,
+        SteamProxy steamProxy)
     {
         _logger = logger;
         _options = options.Value;
-        var proxy = new WebProxy(_options.ProxyHost, _options.ProxyPort);
-
-        if (_options.UseAuthorization)
-            proxy.Credentials = new NetworkCredential
-            {
-                UserName = _options.ProxyAccess.Username,
-                Password = _options.ProxyAccess.Password
-            };
-
-        var clientHandler = new HttpClientHandler
-        {
-            Proxy = proxy,
-            PreAuthenticate = true,
-            UseCookies = false
-        };
-
-        _httpClient = new HttpClient(clientHandler);
+        _steamProxy = steamProxy;
     }
 
     [HttpGet("{steamId}/{appId}/{contextId}")]
-    public async Task<ActionResult<object>> GetInventory(string apiKey, string steamId, int appId = 440,
-        int contextId = 2, [FromQuery(Name = "start_assetid")] string? startAssetId = null)
+    public async Task<ActionResult<object>> GetInventory(string steamId, int appId = 440,
+        int contextId = 2, string? apiKey = null, [FromQuery(Name = "start_assetid")] string? startAssetId = null)
     {
-        if (string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey)
+        if ((string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey) && !string.IsNullOrEmpty(_options.AccessKey))
             return Unauthorized($"Parameter {nameof(apiKey)} is invalid!");
 
         if (string.IsNullOrEmpty(steamId))
@@ -54,46 +38,40 @@ public class InventoryApiController : Controller
 
         if (startAssetId != null) uriBuilder.Append($"&start_assetid={startAssetId}");
 
-        const int maxRetry = 5;
-        var retryCooldown = 500;
-        for (var retry = 1; maxRetry > retry; retry++)
-            try
-            {
-                _logger.LogInformation(
-                    "Attempting to retrieve inventory for user {steamId}... Attempt: {retry}", steamId, retry);
+        try
+        {
+            _logger.LogInformation(
+                "Retrieving inventory for user {steamId} from Steam...", steamId);
 
-                using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(uriBuilder.ToString()));
-                request.Headers.Add("Referer", $"https://steamcommunity.com/profiles/{steamId}/inventory");
-                request.Headers.Add("User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
-                request.Headers.Accept.Clear();
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(uriBuilder.ToString()));
+            request.Headers.Add("Referer", $"https://steamcommunity.com/profiles/{steamId}/inventory");
+            request.Headers.Add("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
+            request.Headers.Accept.Clear();
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-                using var response = await _httpClient.SendAsync(request);
+            // Using method based on settings
+            using var response = !_options.SelfRotatedProxy
+                ? await _steamProxy.SendSelfRotatedProxiedMessage(request)
+                : await _steamProxy.SendAutoRotatedProxiedMessage(request);
 
-                response.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
 
-                var responseStr = await response.Content.ReadFromJsonAsync<object>() ??
-                                  throw new Exception("The response content was null!");
-                _logger.LogInformation("Got inventory for user {steamId} from Steam!", steamId);
+            var responseStr = await response.Content.ReadFromJsonAsync<object>() ??
+                              throw new Exception("The response content was null!");
+            _logger.LogInformation("Got inventory for user {steamId} from Steam! Forwarding response...", steamId);
 
-                return Json(responseStr);
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve inventory for {steamId}!", steamId);
-                retryCooldown *= 2;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An unexpected error occurred while tried to retrieve {steamId}'s inventory!",
-                    steamId);
-                break;
-            }
-            finally
-            {
-                await Task.Delay(retryCooldown);
-            }
+            return Json(responseStr);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve inventory for {steamId}!", steamId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred while tried to retrieve {steamId}'s inventory!",
+                steamId);
+        }
 
         return StatusCode(500);
     }
