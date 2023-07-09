@@ -12,9 +12,9 @@ public class SteamProxy
     private readonly AppOptions _appOptions;
     private readonly ILogger<SteamProxy> _logger;
 
-    private readonly List<ProxyEntry> _proxyEntries;
-
     private readonly HttpClient _proxyLoaderClient;
+
+    private readonly List<ProxyEntry> _proxyPool;
     private int _currentProxyIndex;
     private HttpClient _proxyClient;
 
@@ -23,7 +23,7 @@ public class SteamProxy
         _logger = logger;
         _appOptions = options.Value;
 
-        _proxyEntries = new List<ProxyEntry>();
+        _proxyPool = new List<ProxyEntry>();
         _currentProxyIndex = 0;
 
         _proxyLoaderClient = new HttpClient
@@ -78,7 +78,13 @@ public class SteamProxy
                 profileData.FirstName, profileData.LastName, profileData.Email);
 
             _logger.LogInformation("Loading proxies...");
-            LoadProxies().Wait();
+            LoadProxyPoolAsync().Wait();
+
+            if (_appOptions.ShuffleProxyList)
+            {
+                _logger.LogInformation("Shuffle proxies...");
+                ShufflePool();
+            }
 
             _logger.LogInformation("For initialization we rotate to the first proxy!");
             RotateProxy(true);
@@ -86,7 +92,17 @@ public class SteamProxy
         }
     }
 
-    public async Task LoadProxies()
+    private void ShufflePool()
+    {
+        var random = new Random();
+        for (var i = _proxyPool.Count - 1; i > 0; i--)
+        {
+            var j = random.Next(i + 1);
+            (_proxyPool[i], _proxyPool[j]) = (_proxyPool[j], _proxyPool[i]);
+        }
+    }
+
+    public async Task LoadProxyPoolAsync()
     {
         var reqString = "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100";
         var retries = 0;
@@ -140,14 +156,14 @@ public class SteamProxy
             _logger.LogInformation("Content deserialized!");
 
             reqString = json.Next;
-            _proxyEntries.AddRange(json.Results);
+            _proxyPool.AddRange(json.Results);
         }
 
         _logger.LogInformation("All proxy has been loaded into cache! We have {proxyCount} proxies total.",
-            _proxyEntries.Count);
+            _proxyPool.Count);
     }
 
-    public async Task<ProfileResponse> GetWebShareProfileDetails()
+    private async Task<ProfileResponse> GetWebShareProfileDetails()
     {
         const string reqString = "https://proxy.webshare.io/api/v2/profile/";
         var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
@@ -249,13 +265,13 @@ public class SteamProxy
         if (!init)
             _currentProxyIndex++;
 
-        if (_currentProxyIndex >= _proxyEntries.Count)
+        if (_currentProxyIndex >= _proxyPool.Count)
         {
             _logger.LogInformation("Reaching end of the proxy list. Resetting to 0...");
             _currentProxyIndex = 0;
         }
 
-        var selectedProxy = _proxyEntries[_currentProxyIndex];
+        var selectedProxy = _proxyPool[_currentProxyIndex];
         _logger.LogInformation("New proxy picked -> ID: {id} | {location} => {fullAddress} | Valid? {valid}",
             selectedProxy.Id, $"{selectedProxy.CountryCode} ({selectedProxy.CityName})",
             $"{selectedProxy.ProxyAddress}:{selectedProxy.Port}", selectedProxy.Valid);
