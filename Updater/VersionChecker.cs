@@ -29,7 +29,7 @@ public class VersionChecker
             _logger.LogWarning(
                 "A new {keyword} is available! Current: {current} => Latest: {latest} | Download the new version from here: {uri}",
                 latestRelease.Prerelease ? "Pre-release" : "Release", currentVersion,
-                latestVersion, latestRelease.Url);
+                latestVersion, latestRelease.HtmlUrl);
         }
         else
         {
