@@ -1,16 +1,14 @@
-using Microsoft.Extensions.Options;
 using Serilog;
 using TryInventories.Middlewares;
 using TryInventories.Settings;
 using TryInventories.Updater;
-using TryInventories.WebShareApi;
 
 namespace TryInventories;
 
 internal class TryInventories
 {
     internal const string Author = "Levai Levente @ TryHardDo";
-    internal static readonly Version Version = new(1, 1, 2);
+    internal static readonly Version Version = new(1, 1, 3);
 
     private static void Main(string[] args)
     {
@@ -25,41 +23,15 @@ internal class TryInventories
         builder.Logging.ClearProviders();
         builder.Logging.AddSerilog(logger);
 
+        Log.Logger = logger;
+
         logger.Information("TryInventories - API provider");
         logger.Information("Developed by: {Author} | Version: {Version}", Author, Version);
         logger.Information("Project's source: https://github.com/TryHardDo/TryInventories");
+
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
-
-        // WebShare client singleton service
-        builder.Services.AddSingleton(sp =>
-        {
-            var configuration = sp.GetRequiredService<IOptions<AppOptions>>();
-            var wc = new WebShareClient(configuration.Value.SelfRotatedProxySettings.WebShareApiKey);
-
-            return wc;
-        });
-
-        // Version checker singleton service
-        builder.Services.AddSingleton(sp =>
-        {
-            var loggerService = sp.GetRequiredService<ILogger<VersionChecker>>();
-            var vc = new VersionChecker(loggerService);
-            vc.StartScheduledVersionChecker();
-
-            return vc;
-        });
-
-        // SteamProxy request middleman singleton service
-        builder.Services.AddSingleton(sp =>
-        {
-            var configuration = sp.GetRequiredService<IOptions<AppOptions>>();
-            var loggerService = sp.GetRequiredService<ILogger<SteamProxy>>();
-
-            var proxy = new SteamProxy(loggerService, configuration);
-            proxy.Init();
-
-            return proxy;
-        });
+        builder.Services.AddHostedService<VersionChecker>();
+        builder.Services.AddHostedService<SteamProxy>();
 
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
