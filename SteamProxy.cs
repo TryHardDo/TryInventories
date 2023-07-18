@@ -1,13 +1,15 @@
 ﻿using System.Net;
 using System.Net.Http.Headers;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Serilog;
 using TryInventories.Models;
 using TryInventories.Settings;
+using TryInventories.WebShareApi;
+using TryInventories.WebShareApi.Endpoints;
 
 namespace TryInventories;
 
-public class SteamProxy
+public class SteamProxy : IHostedService
 {
     private readonly AppOptions _appOptions;
     private readonly ILogger<SteamProxy> _logger;
@@ -15,6 +17,8 @@ public class SteamProxy
     private readonly HttpClient _proxyLoaderClient;
 
     private readonly List<ProxyEntry> _proxyPool;
+
+    private readonly WebShareClient _webShareClient;
     private int _currentProxyIndex;
     private HttpClient _proxyClient;
 
@@ -26,6 +30,7 @@ public class SteamProxy
         _proxyPool = new List<ProxyEntry>();
         _currentProxyIndex = 0;
 
+        _webShareClient = new WebShareClient(_appOptions.SelfRotatedProxySettings.WebShareApiKey);
         _proxyLoaderClient = new HttpClient
         {
             DefaultRequestHeaders =
@@ -36,6 +41,17 @@ public class SteamProxy
         };
 
         _proxyClient = new HttpClient();
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        Init();
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 
     public void Init()
@@ -76,7 +92,7 @@ public class SteamProxy
 
             try
             {
-                var profileData = GetWebShareProfileDetails().Result;
+                var profileData = new UserInfoEndpointMessage().Call<ProfileResponse>(_webShareClient).Result;
                 _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
                     profileData.FirstName, profileData.LastName, profileData.Email);
             }
@@ -87,8 +103,7 @@ public class SteamProxy
                 return;
             }
 
-            _logger.LogInformation("Loading proxies...");
-            LoadProxyPoolAsync().Wait();
+            LoadPoolAsync(100, "direct").Wait();
 
             if (_appOptions.ShuffleProxyList)
             {
@@ -112,80 +127,41 @@ public class SteamProxy
         }
     }
 
-    public async Task LoadProxyPoolAsync()
+    public async Task LoadPoolAsync(int chunkSize, string mode)
     {
-        var reqString = "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100";
-        var retries = 0;
-        const int max = 3;
-        const int cooldown = 3000;
+        // Clear pool to prevent duplicates
+        _proxyPool.Clear();
 
-        while (reqString != null)
+        var hasNext = false;
+        var page = 1;
+
+        Log.Information("Started loading proxy list with page size of {pageSize} and mode {mode}!", chunkSize, mode);
+
+        do
         {
-            retries++;
-
-            _logger.LogInformation("Retrieving proxy chunk...");
-
-            using var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
-            var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
-
-            _logger.LogInformation("Request was sent!");
-
-            try
+            Log.Information("Page - {page} | Chunk size - {chunkSize}/req", page, chunkSize);
+            var rsp = await new ProxyListEndpointMessage
             {
-                rsp.EnsureSuccessStatusCode();
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError("Failed to retrieve a proxy list chunk from WebShare! Status: {status}",
-                    rsp.StatusCode);
+                Mode = mode,
+                Page = page,
+                PageSize = chunkSize
+            }.Call<ProxyListResponse>(_webShareClient);
 
-                if (ex.StatusCode == HttpStatusCode.Unauthorized)
-                {
-                    _logger.LogError("Api credentials are incorrect!");
-                    return;
-                }
+            Log.Information("Chunk retrieved!");
 
-                if (max < retries)
-                {
-                    _logger.LogInformation("(Attempt: {retries}) Retrying in {cooldown} seconds...", retries,
-                        cooldown / 1000);
+            CacheChunk(rsp.Results.ToList());
+            Log.Information("Cached {count} proxies! {actual}/{total}", rsp.Results.Count, _proxyPool.Count, rsp.Count);
 
-                    await Task.Delay(cooldown);
-                    continue;
-                }
+            hasNext = rsp.Next != null;
+            page++;
+        } while (hasNext);
 
-                _logger.LogError("Failed to retrieve proxy list after multiple retries!");
-            }
-
-            _logger.LogInformation("Response arrived! Status: {status}", rsp.StatusCode);
-
-            var content = await rsp.Content.ReadAsStringAsync();
-            var json = JsonSerializer.Deserialize<ProxyListResponse>(content) ??
-                       throw new JsonException("Failed to deserialize the returned proxies from WebShare's API!");
-
-            _logger.LogInformation("Content deserialized!");
-
-            reqString = json.Next;
-            _proxyPool.AddRange(json.Results);
-        }
-
-        _logger.LogInformation("All proxy has been loaded into cache! We have {proxyCount} proxies total.",
-            _proxyPool.Count);
+        Log.Information("All proxy retrieved! Proxy count: {finalCount}", _proxyPool.Count);
     }
 
-    private async Task<ProfileResponse> GetWebShareProfileDetails()
+    private void CacheChunk(List<ProxyEntry> toAdd)
     {
-        const string reqString = "https://proxy.webshare.io/api/v2/profile/";
-        var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
-        var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
-
-        rsp.EnsureSuccessStatusCode();
-
-        var content = await rsp.Content.ReadAsStringAsync();
-        var json = JsonSerializer.Deserialize<ProfileResponse>(content) ??
-                   throw new JsonException("Failed to deserialize the response from WebShare API!");
-
-        return json;
+        _proxyPool.AddRange(toAdd);
     }
 
     public async Task<HttpResponseMessage> SendAutoRotatedProxiedMessage(HttpRequestMessage req)
