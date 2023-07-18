@@ -56,3 +56,5 @@ internal class TryInventories
         app.Run();
     }
 }
+
+// Todo: Adding sorting for proxy pool based on proxy response time (ping).
