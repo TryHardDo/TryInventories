@@ -132,7 +132,7 @@ public class SteamProxy : IHostedService
         // Clear pool to prevent duplicates
         _proxyPool.Clear();
 
-        var hasNext = false;
+        bool hasNext;
         var page = 1;
 
         Log.Information("Started loading proxy list with page size of {pageSize} and mode {mode}!", chunkSize, mode);
@@ -149,7 +149,7 @@ public class SteamProxy : IHostedService
 
             Log.Information("Chunk retrieved!");
 
-            CacheChunk(rsp.Results.ToList());
+            CacheChunk(rsp.Results);
             Log.Information("Cached {count} proxies! {actual}/{total}", rsp.Results.Count, _proxyPool.Count, rsp.Count);
 
             hasNext = rsp.Next != null;
@@ -159,7 +159,7 @@ public class SteamProxy : IHostedService
         Log.Information("All proxy retrieved! Proxy count: {finalCount}", _proxyPool.Count);
     }
 
-    private void CacheChunk(List<ProxyEntry> toAdd)
+    private void CacheChunk(IEnumerable<ProxyEntry> toAdd)
     {
         _proxyPool.AddRange(toAdd);
     }
