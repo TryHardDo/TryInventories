@@ -2,7 +2,7 @@
 
 namespace TryInventories.Updater;
 
-public class VersionChecker
+public class VersionChecker : IHostedService
 {
     private readonly GitHubClient _gitHubClient;
     private readonly ILogger<VersionChecker> _logger;
@@ -12,6 +12,18 @@ public class VersionChecker
     {
         _gitHubClient = new GitHubClient(new ProductHeaderValue("TryInventories"));
         _logger = logger;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        StartScheduledVersionChecker();
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        StopScheduledVersionChecker();
+        return Task.CompletedTask;
     }
 
     public async void CheckVersionAsync(bool first = false)
