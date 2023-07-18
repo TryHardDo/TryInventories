@@ -53,10 +53,6 @@ internal class TryInventories
 
         app.MapControllers();
 
-        // Resolving services early to run init methods before app.Run()
-        app.Services.GetService<VersionChecker>();
-        app.Services.GetService<SteamProxy>();
-
         app.Run();
     }
 }
