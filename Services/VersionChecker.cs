@@ -1,6 +1,6 @@
 ﻿using Octokit;
 
-namespace TryInventories.Updater;
+namespace TryInventories.Services;
 
 public class VersionChecker : IHostedService
 {

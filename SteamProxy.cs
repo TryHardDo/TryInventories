@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using Serilog;
 using TryInventories.Models;
@@ -12,34 +11,19 @@ namespace TryInventories;
 public class SteamProxy : IHostedService
 {
     private readonly AppOptions _appOptions;
-    private readonly ILogger<SteamProxy> _logger;
-
-    private readonly HttpClient _proxyLoaderClient;
-
     private readonly List<ProxyEntry> _proxyPool;
-
     private readonly WebShareClient _webShareClient;
     private int _currentProxyIndex;
     private HttpClient _proxyClient;
 
-    public SteamProxy(ILogger<SteamProxy> logger, IOptions<AppOptions> options)
+    public SteamProxy(IOptions<AppOptions> options)
     {
-        _logger = logger;
         _appOptions = options.Value;
 
         _proxyPool = new List<ProxyEntry>();
         _currentProxyIndex = 0;
 
         _webShareClient = new WebShareClient(_appOptions.SelfRotatedProxySettings.WebShareApiKey);
-        _proxyLoaderClient = new HttpClient
-        {
-            DefaultRequestHeaders =
-            {
-                Authorization =
-                    new AuthenticationHeaderValue("Token", _appOptions.SelfRotatedProxySettings.WebShareApiKey)
-            }
-        };
-
         _proxyClient = new HttpClient();
     }
 
@@ -56,15 +40,19 @@ public class SteamProxy : IHostedService
 
     public void Init()
     {
+        if (_appOptions.SelfRotatedProxySettings != null)
+        {
+        }
+
         if (!_appOptions.SelfRotatedProxy)
         {
-            _logger.LogInformation("Mode: AutoRotated => Proxy rotation is handled by WebShare!");
+            Log.Information("Rotation will be handled by WebShare!");
             var proxy = new WebProxy(_appOptions.AutoRotatedProxySettings.ProxyHost,
                 _appOptions.AutoRotatedProxySettings.ProxyPort);
 
             if (_appOptions.AutoRotatedProxySettings.UseAuthorization)
             {
-                _logger.LogInformation("Using authorization for proxied requests...");
+                Log.Information("Using authorization for proxied requests.");
 
                 proxy.Credentials = new NetworkCredential
                 {
@@ -73,7 +61,6 @@ public class SteamProxy : IHostedService
                 };
             }
 
-            _logger.LogDebug("Client handler reached!");
             var clientHandler = new HttpClientHandler
             {
                 Proxy = proxy,
@@ -82,23 +69,23 @@ public class SteamProxy : IHostedService
             };
 
             _proxyClient = new HttpClient(clientHandler);
-            _logger.LogInformation("Initialization completed!");
+            Log.Information("Ready for requests!");
         }
         else
         {
-            _logger.LogInformation("Mode: SelfRotated => Proxy rotation is handled by the software!");
-
-            _logger.LogInformation("Getting WebShare profile details...");
+            Log.Information("Rotation will be handled by TryInventories!");
 
             try
             {
                 var profileData = new UserInfoEndpointMessage().Call<ProfileResponse>(_webShareClient).Result;
-                _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
+                Log.Information("The API key belongs to the following user: ({id}) {first} {last} -> {email}! \n" +
+                                "This API key will be used for using WebShare's API services which is required by the program to work correctly.",
+                    profileData.Id,
                     profileData.FirstName, profileData.LastName, profileData.Email);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
+                Log.Error(ex,
                     "Failed to retrieve profile details! It mainly caused by the wrong API key. Please check it!");
                 return;
             }
@@ -107,13 +94,13 @@ public class SteamProxy : IHostedService
 
             if (_appOptions.ShuffleProxyList)
             {
-                _logger.LogInformation("Shuffle proxies...");
+                Log.Information("Shuffle proxies...");
                 ShufflePool();
             }
 
-            _logger.LogInformation("For initialization we rotate to the first proxy!");
+            Log.Information("For initialization we rotate to the first proxy!");
             RotateProxy(true);
-            _logger.LogInformation("Initialization completed!");
+            Log.Information("Initialization completed!");
         }
     }
 
@@ -127,7 +114,13 @@ public class SteamProxy : IHostedService
         }
     }
 
-    public async Task LoadPoolAsync(int chunkSize, string mode)
+    /// <summary>
+    ///     Loads the proxy pool from WebShare into the program's pool cache.
+    /// </summary>
+    /// <param name="chunkSize">Amount of proxies per request.</param>
+    /// <param name="mode">Mode of the proxy: backbone, direct...</param>
+    /// <returns></returns>
+    private async Task LoadPoolAsync(int chunkSize, string mode)
     {
         // Clear pool to prevent duplicates
         _proxyPool.Clear();
@@ -191,7 +184,7 @@ public class SteamProxy : IHostedService
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogWarning(ex, "Proxied call did not indicated success! Retrying call in {delay} second(s)...",
+                Log.Warning(ex, "Proxied call did not indicated success! Retrying call in {delay} second(s)...",
                     delay / 1000);
                 attempt++;
 
@@ -200,7 +193,7 @@ public class SteamProxy : IHostedService
         } while (attempt < maxRetry);
 
         if (attempt == maxRetry)
-            _logger.LogError(
+            Log.Error(
                 "We have reached the maximum allowed retry count for this request! Returning last response message...");
 
         return rsp;
@@ -232,7 +225,7 @@ public class SteamProxy : IHostedService
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogWarning(ex, "Proxied call did not indicated success! Rotating proxy and retrying...");
+                Log.Warning(ex, "Proxied call did not indicated success! Rotating proxy and retrying...");
 
                 RotateProxy();
                 rotated++;
@@ -240,7 +233,7 @@ public class SteamProxy : IHostedService
         } while (rotated < maxRotates);
 
         if (rotated == maxRotates)
-            _logger.LogError(
+            Log.Error(
                 "We have reached the maximum allowed rotate count for a request! Returning last response message...");
 
         return rsp;
@@ -253,12 +246,12 @@ public class SteamProxy : IHostedService
 
         if (_currentProxyIndex >= _proxyPool.Count)
         {
-            _logger.LogInformation("Reaching end of the proxy list. Resetting to 0...");
+            Log.Information("Reaching end of the proxy list. Resetting to 0...");
             _currentProxyIndex = 0;
         }
 
         var selectedProxy = _proxyPool[_currentProxyIndex];
-        _logger.LogInformation("New proxy picked -> ID: {id} | {location} => {fullAddress} | Valid? {valid}",
+        Log.Information("New proxy picked -> ID: {id} | {location} => {fullAddress} | Valid? {valid}",
             selectedProxy.Id, $"{selectedProxy.CountryCode} ({selectedProxy.CityName})",
             $"{selectedProxy.ProxyAddress}:{selectedProxy.Port}", selectedProxy.Valid);
 
@@ -276,6 +269,6 @@ public class SteamProxy : IHostedService
             UseProxy = true
         });
 
-        _logger.LogInformation("Proxy successfully set!");
+        Log.Information("Proxy successfully set!");
     }
 }

@@ -1,7 +1,7 @@
 using Serilog;
 using TryInventories.Middlewares;
+using TryInventories.Services;
 using TryInventories.Settings;
-using TryInventories.Updater;
 
 namespace TryInventories;
 
@@ -14,24 +14,29 @@ internal class TryInventories
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        var logger = new LoggerConfiguration()
+        Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(builder.Configuration)
             .WriteTo.Console()
             .Enrich.FromLogContext()
             .CreateLogger();
 
+        Log.Information("TryInventories - Steam inventory loader");
+        Log.Information("Developed by: {Author} | Version: {Version}", Author, Version);
+        Log.Information("\n\n" +
+                        "DISCLAIMER: Please be advised that the use of this program is at your own risk. The author of this program shall not be held responsible for any consequences that may arise from its usage.\n" +
+                        "By using this program, you acknowledge that you have read and understood this disclaimer and agree to use the program at your own risk. Press any key to continue using the software." +
+                        "\n");
+
+        Console.ReadKey();
+        Log.Information("Starting software...");
+
         builder.Logging.ClearProviders();
-        builder.Logging.AddSerilog(logger);
-
-        Log.Logger = logger;
-
-        logger.Information("TryInventories - API provider");
-        logger.Information("Developed by: {Author} | Version: {Version}", Author, Version);
-        logger.Information("Project's source: https://github.com/TryHardDo/TryInventories");
+        builder.Logging.AddSerilog(Log.Logger);
 
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
         builder.Services.AddHostedService<VersionChecker>();
-        builder.Services.AddHostedService<SteamProxy>();
+        builder.Services.AddSingleton<SteamProxy>();
+        builder.Services.PostConfigure<SteamProxy>(sp => { sp.Init(); });
 
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();

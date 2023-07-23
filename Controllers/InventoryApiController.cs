@@ -2,6 +2,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Serilog;
 using TryInventories.Settings;
 
 namespace TryInventories.Controllers;
@@ -10,16 +11,13 @@ namespace TryInventories.Controllers;
 [Route("inventory")]
 public class InventoryApiController : Controller
 {
-    private readonly ILogger<InventoryApiController> _logger;
     private readonly AppOptions _options;
     private readonly SteamProxy _steamProxy;
 
-    public InventoryApiController(ILogger<InventoryApiController> logger, IOptions<AppOptions> options,
-        SteamProxy steamProxy)
+    public InventoryApiController(IOptions<AppOptions> options, SteamProxy steam)
     {
-        _logger = logger;
         _options = options.Value;
-        _steamProxy = steamProxy;
+        _steamProxy = steam;
     }
 
     [HttpGet("{steamId}/{appId}/{contextId}")]
@@ -40,7 +38,7 @@ public class InventoryApiController : Controller
 
         try
         {
-            _logger.LogInformation(
+            Log.Information(
                 "Retrieving inventory for user {steamId} from Steam...", steamId);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(uriBuilder.ToString()));
@@ -59,17 +57,17 @@ public class InventoryApiController : Controller
 
             var responseStr = await response.Content.ReadFromJsonAsync<object>() ??
                               throw new Exception("The response content was null!");
-            _logger.LogInformation("Got inventory for user {steamId} from Steam! Forwarding response...", steamId);
+            Log.Information("Got inventory for user {steamId} from Steam! Forwarding response...", steamId);
 
             return Json(responseStr);
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to retrieve inventory for {steamId}!", steamId);
+            Log.Error(ex, "Failed to retrieve inventory for {steamId}!", steamId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unexpected error occurred while tried to retrieve {steamId}'s inventory!",
+            Log.Error(ex, "An unexpected error occurred while tried to retrieve {steamId}'s inventory!",
                 steamId);
         }
 

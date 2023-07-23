@@ -1,8 +1,8 @@
-﻿using System.Net.Http.Headers;
+﻿using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Web;
-using Serilog;
 
 namespace TryInventories.WebShareApi;
 
@@ -37,7 +37,7 @@ public class WebShareClient : IDisposable
         var attempt = 0;
         var delay = 1000;
 
-        HttpResponseMessage? response = null;
+        HttpResponseMessage? response;
         do
         {
             var queryDict = endpoint.QueryParams;
@@ -55,28 +55,19 @@ public class WebShareClient : IDisposable
                 reqMsg.Content = new StringContent(jsonString, Encoding.UTF8, "application/json");
             }
 
-            try
-            {
-                response = await _client.SendAsync(reqMsg, _cancellationToken.Token);
-                response.EnsureSuccessStatusCode();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to invoke API endpoint \"{endpoint}\"! Attempt: {attempt} | Headers: {headers}",
-                    reqMsg.RequestUri,
-                    attempt, _client.DefaultRequestHeaders);
+            response = await _client.SendAsync(reqMsg, _cancellationToken.Token);
+            if (response.IsSuccessStatusCode) break;
 
-                await Task.Delay(delay);
-                attempt++;
-                delay += 1000;
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                throw new HttpRequestException(
+                    $"The response returned {response.StatusCode} which mainly caused by invalid API key. Please check it!");
 
-                continue;
-            }
-
-            break;
+            await Task.Delay(delay);
+            attempt++;
+            delay += 1000;
         } while (attempt <= max);
 
-        return response ?? throw new InvalidOperationException("Failed to execute API request with multiple retries!");
+        return response ?? throw new InvalidOperationException("The response was NULL!");
     }
 
     public async Task<string> Call(WebShareEndpoint endpoint)
