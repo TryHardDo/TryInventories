@@ -26,7 +26,7 @@ public class VersionChecker : IHostedService
         return Task.CompletedTask;
     }
 
-    public async void CheckVersionAsync(bool first = false)
+    private async void CheckVersionAsync(bool first = false)
     {
         var releases = await _gitHubClient.Repository.Release.GetAll("TryHardDo", "TryInventories");
 
@@ -52,7 +52,7 @@ public class VersionChecker : IHostedService
         }
     }
 
-    public void StartScheduledVersionChecker()
+    private void StartScheduledVersionChecker()
     {
         var first = true;
         _timer = new Timer(_ =>
@@ -62,7 +62,7 @@ public class VersionChecker : IHostedService
         }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
     }
 
-    public void StopScheduledVersionChecker()
+    private void StopScheduledVersionChecker()
     {
         if (_timer == null) return;
 

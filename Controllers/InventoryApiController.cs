@@ -21,7 +21,7 @@ public class InventoryApiController : Controller
     }
 
     [HttpGet("{steamId}/{appId}/{contextId}")]
-    public async Task<ActionResult<object>> GetInventory(string steamId, int appId = 440,
+    public async Task<ActionResult> GetInventory(string steamId, int appId = 440,
         int contextId = 2, string? apiKey = null, [FromQuery(Name = "start_assetid")] string? startAssetId = null)
     {
         if ((string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey) && !string.IsNullOrEmpty(_options.AccessKey))
@@ -48,22 +48,16 @@ public class InventoryApiController : Controller
             request.Headers.Accept.Clear();
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            // Using method based on settings
-            using var response = _options.SelfRotatedProxy
-                ? await _steamProxy.SendSelfRotatedProxiedMessage(request)
-                : await _steamProxy.SendAutoRotatedProxiedMessage(request);
+            // Todo: Re-implement the conditional request strategy when it is ready
+            using var response = await _steamProxy.ProxyClient.SendAsync(request);
 
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode) return StatusCode((int)response.StatusCode);
 
             var responseStr = await response.Content.ReadFromJsonAsync<object>() ??
                               throw new Exception("The response content was null!");
             Log.Information("Got inventory for user {steamId} from Steam! Forwarding response...", steamId);
 
-            return Json(responseStr);
-        }
-        catch (HttpRequestException ex)
-        {
-            Log.Error(ex, "Failed to retrieve inventory for {steamId}!", steamId);
+            return Ok(responseStr);
         }
         catch (Exception ex)
         {

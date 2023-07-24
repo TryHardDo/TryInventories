@@ -22,27 +22,24 @@ internal class TryInventories
 
         Log.Information("TryInventories - Steam inventory loader");
         Log.Information("Developed by: {Author} | Version: {Version}", Author, Version);
-        Log.Information("\n\n" +
-                        "DISCLAIMER: Please be advised that the use of this program is at your own risk. The author of this program shall not be held responsible for any consequences that may arise from its usage.\n" +
-                        "By using this program, you acknowledge that you have read and understood this disclaimer and agree to use the program at your own risk. Press any key to continue using the software." +
-                        "\n");
-
-        Console.ReadKey();
         Log.Information("Starting software...");
 
         builder.Logging.ClearProviders();
         builder.Logging.AddSerilog(Log.Logger);
 
         builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
-        builder.Services.AddHostedService<VersionChecker>();
         builder.Services.AddSingleton<SteamProxy>();
-        builder.Services.PostConfigure<SteamProxy>(sp => { sp.Init(); });
+
+        builder.Services.AddHostedService<VersionChecker>();
+        builder.Services.AddHostedService<ProxyUpdater>();
 
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
         var app = builder.Build();
+
+        app.Services.GetRequiredService<SteamProxy>().Init();
 
         if (app.Environment.IsDevelopment())
         {
@@ -52,8 +49,6 @@ internal class TryInventories
 
         app.UseRequestLogger();
 
-        //app.UseHttpsRedirection();
-
         app.UseAuthorization();
 
         app.MapControllers();
@@ -61,5 +56,3 @@ internal class TryInventories
         app.Run();
     }
 }
-
-// Todo: Adding sorting for proxy pool based on proxy response time (ping).
