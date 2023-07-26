@@ -1,7 +1,7 @@
 using Serilog;
 using TryInventories.Middlewares;
 using TryInventories.Services;
-using TryInventories.Settings;
+using TryInventories.SettingModels;
 
 namespace TryInventories;
 
@@ -27,7 +27,7 @@ internal class TryInventories
         builder.Logging.ClearProviders();
         builder.Logging.AddSerilog(Log.Logger);
 
-        builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Settings));
+        builder.Services.Configure<Settings>(builder.Configuration.GetSection(Settings.SectionName));
         builder.Services.AddSingleton<SteamProxy>();
 
         builder.Services.AddHostedService<VersionChecker>();

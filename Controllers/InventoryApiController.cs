@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Serilog;
-using TryInventories.Settings;
+using TryInventories.SettingModels;
 
 namespace TryInventories.Controllers;
 
@@ -11,10 +11,10 @@ namespace TryInventories.Controllers;
 [Route("inventory")]
 public class InventoryApiController : Controller
 {
-    private readonly AppOptions _options;
+    private readonly Settings _options;
     private readonly SteamProxy _steamProxy;
 
-    public InventoryApiController(IOptions<AppOptions> options, SteamProxy steam)
+    public InventoryApiController(IOptions<Settings> options, SteamProxy steam)
     {
         _options = options.Value;
         _steamProxy = steam;
@@ -24,7 +24,8 @@ public class InventoryApiController : Controller
     public async Task<ActionResult> GetInventory(string steamId, int appId = 440,
         int contextId = 2, string? apiKey = null, [FromQuery(Name = "start_assetid")] string? startAssetId = null)
     {
-        if ((string.IsNullOrEmpty(apiKey) || _options.AccessKey != apiKey) && !string.IsNullOrEmpty(_options.AccessKey))
+        if ((string.IsNullOrEmpty(apiKey) || _options.AccessToken != apiKey) &&
+            !string.IsNullOrEmpty(_options.AccessToken))
             return Unauthorized($"Parameter {nameof(apiKey)} is invalid!");
 
         if (string.IsNullOrEmpty(steamId))

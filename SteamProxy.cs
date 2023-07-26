@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using Serilog;
 using TryInventories.Models;
-using TryInventories.Settings;
+using TryInventories.SettingModels;
 using TryInventories.WebShareApi;
 using TryInventories.WebShareApi.Endpoints;
 
@@ -9,25 +9,38 @@ namespace TryInventories;
 
 public class SteamProxy
 {
-    private readonly AppOptions _appOptions;
+    private readonly Settings _appSettings;
     private readonly WebShareClient _webShareClient;
 
-    public SteamProxy(IOptions<AppOptions> options, IHostApplicationLifetime applicationLifetime)
+    public SteamProxy(IOptions<Settings> appSettings)
     {
-        _appOptions = options.Value;
-        _webShareClient = new WebShareClient(_appOptions.SelfRotatedProxySettings.WebShareApiKey);
-        ProxyClient = new ProxyClient(new ProxyPool());
+        _appSettings = appSettings.Value;
+        _webShareClient = new WebShareClient(_appSettings.InternalRotationSettings.WebShareApiKey);
+        ProxyClient = new ProxyClient(new ProxyPool(), _appSettings.InternalRotationSettings.RotationThreshold);
     }
 
     public ProxyClient ProxyClient { get; private set; }
 
     public void Init()
     {
-        if (!_appOptions.SelfRotatedProxy)
+        if (!_appSettings.AcceptTermsOfUse)
+        {
+            Log.Warning("DISCLAIMER:\n" +
+                        "By accepting the Terms of Use and using this software, you acknowledge that I, the creator/developer, cannot be held responsible for any damages, losses,\n" +
+                        "or issues that may arise from the use of this software. The software is provided \"as is,\" without any warranties, and users assume full responsibility for its use.\n" +
+                        "Users are encouraged to review and understand this disclaimer before proceeding with the software.\n\n" +
+                        "If you agree with these then change \"{fieldName}\" to true in {configFile} to continue using this program.", "AcceptTermsOfUse", "appsettings.json");
+
+            Environment.Exit(0);
+        }
+
+        // Todo: Re-implement external rotation option!
+        if (_appSettings.ProxyMode == Mode.External)
             Log.Warning(
-                "WebShare based proxy rotation feature is under rework and not available for use right now. Self rotated mode will be used!");
+                "External proxy rotation feature is under rework and not available for use right now. Internal rotation mode will be used!");
         else
-            Log.Information("The proxy rotation will be handled by TryInventories!");
+            Log.Information("Using {mode} rotation mode. The proxy rotation will be handled by TryInventories!",
+                _appSettings.ProxyMode);
 
         try
         {
@@ -43,7 +56,7 @@ public class SteamProxy
             var proxies = LoadPoolAsync(100, "direct").Result;
 
             var pool = new ProxyPool(proxies);
-            if (_appOptions.ShuffleProxyList) pool.ShufflePool();
+            if (_appSettings.ShuffleProxyPool) pool.ShufflePool();
 
             ProxyClient = new ProxyClient(pool);
         }

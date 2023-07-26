@@ -1,15 +1,19 @@
-﻿using Serilog;
+﻿using Microsoft.Extensions.Options;
+using Serilog;
+using TryInventories.SettingModels;
 
 namespace TryInventories.Services;
 
 public class ProxyUpdater : IHostedService
 {
+    private readonly Settings _settings;
     private readonly SteamProxy _steamProxy;
     private Timer? _timer;
 
-    public ProxyUpdater(SteamProxy steamProxy)
+    public ProxyUpdater(SteamProxy steamProxy, IOptions<Settings> appSettings)
     {
         _steamProxy = steamProxy;
+        _settings = appSettings.Value;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -26,17 +30,22 @@ public class ProxyUpdater : IHostedService
 
     private void StartScheduledProxyPoolRefresh()
     {
-        var syncInterval = TimeSpan.FromMinutes(30);
+        var syncInterval = TimeSpan.FromMinutes(_settings.InternalRotationSettings.PoolSyncInterval);
 
-        _timer = new Timer(_ =>
-        {
-            Log.Information("Automatic proxy pool sync initiated...");
+        if (_settings.InternalRotationSettings.DoScheduledPoolSync)
+            _timer = new Timer(_ =>
+            {
+                Log.Information("Automatic proxy pool sync initiated...");
 
-            var pool = _steamProxy.LoadPoolAsync(100, "direct").Result;
-            _steamProxy.ProxyClient.SwapPool(new ProxyPool(pool));
+                var proxies = _steamProxy.LoadPoolAsync(100, "direct").Result;
+                var pool = new ProxyPool(proxies);
 
-            Log.Information("Proxy pool synced!");
-        }, null, syncInterval, syncInterval);
+                if (_settings.ShuffleProxyPool) pool.ShufflePool();
+
+                _steamProxy.ProxyClient.SwapPool(pool);
+
+                Log.Information("Proxy pool synced!");
+            }, null, syncInterval, syncInterval);
     }
 
     private void StopScheduler()
