@@ -82,6 +82,11 @@ public class Settings
 {
     public const string SectionName = "TryInventories";
 
+    /// <summary>
+    ///     If it is set to true you accept the terms of use mentioned in the disclaimer at program restart in the console.
+    ///     This is false by default and
+    ///     the program only keep running if you accept these by setting this value to true.
+    /// </summary>
     public bool AcceptTermsOfUse { get; set; } = false;
 
     /// <summary>
