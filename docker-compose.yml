@@ -1,0 +1,10 @@
+version: '3.4'
+
+services:
+  tryinventories:
+    image: tryharddo/tryinventories:latest
+    ports:
+      - 3000:3000
+    volumes:
+      - ./appsettings.json:/app/appsettings.json
+    restart: on-failure
