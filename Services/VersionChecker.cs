@@ -39,7 +39,7 @@ public class VersionChecker : IHostedService
         if (currentVersion < latestVersion)
         {
             _logger.LogWarning(
-                "A new {keyword} is available! Current: {current} => Latest: {latest} | Download the new version from here: {uri}",
+                "A new {keyword} is available! Current: {current} => Latest: {latest} | Pull the new version if you are running it inside Docker or download the new builds from here: {uri}",
                 latestRelease.Prerelease ? "Pre-release" : "Release", currentVersion,
                 latestVersion, latestRelease.HtmlUrl);
         }
