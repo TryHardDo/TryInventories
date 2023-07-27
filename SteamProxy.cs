@@ -29,7 +29,8 @@ public class SteamProxy
                         "By accepting the Terms of Use and using this software, you acknowledge that I, the creator/developer, cannot be held responsible for any damages, losses,\n" +
                         "or issues that may arise from the use of this software. The software is provided \"as is,\" without any warranties, and users assume full responsibility for its use.\n" +
                         "Users are encouraged to review and understand this disclaimer before proceeding with the software.\n\n" +
-                        "If you agree with these then change \"{fieldName}\" to true in {configFile} to continue using this program.", "AcceptTermsOfUse", "appsettings.json");
+                        "If you agree with these then change \"{fieldName}\" to true in {configFile} to continue using this program.",
+                "AcceptTermsOfUse", "appsettings.json");
 
             Environment.Exit(0);
         }
