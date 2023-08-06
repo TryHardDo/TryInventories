@@ -1,8 +1,8 @@
 ﻿using Octokit;
 
-namespace TryInventories.Updater;
+namespace TryInventories.Services;
 
-public class VersionChecker
+public class VersionChecker : IHostedService
 {
     private readonly GitHubClient _gitHubClient;
     private readonly ILogger<VersionChecker> _logger;
@@ -14,7 +14,19 @@ public class VersionChecker
         _logger = logger;
     }
 
-    public async void CheckVersionAsync(bool first = false)
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        StartScheduledVersionChecker();
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        StopScheduledVersionChecker();
+        return Task.CompletedTask;
+    }
+
+    private async void CheckVersionAsync(bool first = false)
     {
         var releases = await _gitHubClient.Repository.Release.GetAll("TryHardDo", "TryInventories");
 
@@ -27,7 +39,7 @@ public class VersionChecker
         if (currentVersion < latestVersion)
         {
             _logger.LogWarning(
-                "A new {keyword} is available! Current: {current} => Latest: {latest} | Download the new version from here: {uri}",
+                "A new {keyword} is available! Current: {current} => Latest: {latest} | Pull the new version if you are running it inside Docker or download the new builds from here: {uri}",
                 latestRelease.Prerelease ? "Pre-release" : "Release", currentVersion,
                 latestVersion, latestRelease.HtmlUrl);
         }
@@ -40,7 +52,7 @@ public class VersionChecker
         }
     }
 
-    public void StartScheduledVersionChecker()
+    private void StartScheduledVersionChecker()
     {
         var first = true;
         _timer = new Timer(_ =>
@@ -50,7 +62,7 @@ public class VersionChecker
         }, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
     }
 
-    public void StopScheduledVersionChecker()
+    private void StopScheduledVersionChecker()
     {
         if (_timer == null) return;
 

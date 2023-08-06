@@ -1,305 +1,109 @@
-﻿using System.Net;
-using System.Net.Http.Headers;
-using System.Text.Json;
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
+using Serilog;
 using TryInventories.Models;
-using TryInventories.Settings;
+using TryInventories.SettingModels;
+using TryInventories.WebShareApi;
+using TryInventories.WebShareApi.Endpoints;
 
 namespace TryInventories;
 
 public class SteamProxy
 {
-    private readonly AppOptions _appOptions;
-    private readonly ILogger<SteamProxy> _logger;
+    private readonly Settings _appSettings;
+    private readonly WebShareClient _webShareClient;
 
-    private readonly HttpClient _proxyLoaderClient;
-
-    private readonly List<ProxyEntry> _proxyPool;
-    private int _currentProxyIndex;
-    private HttpClient _proxyClient;
-
-    public SteamProxy(ILogger<SteamProxy> logger, IOptions<AppOptions> options)
+    public SteamProxy(IOptions<Settings> appSettings)
     {
-        _logger = logger;
-        _appOptions = options.Value;
-
-        _proxyPool = new List<ProxyEntry>();
-        _currentProxyIndex = 0;
-
-        _proxyLoaderClient = new HttpClient
-        {
-            DefaultRequestHeaders =
-            {
-                Authorization =
-                    new AuthenticationHeaderValue("Token", _appOptions.SelfRotatedProxySettings.WebShareApiKey)
-            }
-        };
-
-        _proxyClient = new HttpClient();
+        _appSettings = appSettings.Value;
+        _webShareClient = new WebShareClient(_appSettings.InternalRotationSettings.WebShareApiKey);
+        ProxyClient = new ProxyClient(new ProxyPool(), _appSettings.InternalRotationSettings.RotationThreshold);
     }
+
+    public ProxyClient ProxyClient { get; private set; }
 
     public void Init()
     {
-        if (!_appOptions.SelfRotatedProxy)
+        if (!_appSettings.AcceptTermsOfUse)
         {
-            _logger.LogInformation("Mode: AutoRotated => Proxy rotation is handled by WebShare!");
-            var proxy = new WebProxy(_appOptions.AutoRotatedProxySettings.ProxyHost,
-                _appOptions.AutoRotatedProxySettings.ProxyPort);
+            Log.Warning("DISCLAIMER:\n" +
+                        "By accepting the Terms of Use and using this software, you acknowledge that I, the creator/developer, cannot be held responsible for any damages, losses,\n" +
+                        "or issues that may arise from the use of this software. The software is provided \"as is,\" without any warranties, and users assume full responsibility for its use.\n" +
+                        "Users are encouraged to review and understand this disclaimer before proceeding with the software.\n\n" +
+                        "If you agree with these then change \"{fieldName}\" to true in {configFile} to continue using this program.",
+                "AcceptTermsOfUse", "appsettings.json");
 
-            if (_appOptions.AutoRotatedProxySettings.UseAuthorization)
-            {
-                _logger.LogInformation("Using authorization for proxied requests...");
-
-                proxy.Credentials = new NetworkCredential
-                {
-                    UserName = _appOptions.AutoRotatedProxySettings.AuthorizationCredentials.Username,
-                    Password = _appOptions.AutoRotatedProxySettings.AuthorizationCredentials.Password
-                };
-            }
-
-            _logger.LogDebug("Client handler reached!");
-            var clientHandler = new HttpClientHandler
-            {
-                Proxy = proxy,
-                PreAuthenticate = true,
-                UseCookies = false
-            };
-
-            _proxyClient = new HttpClient(clientHandler);
-            _logger.LogInformation("Initialization completed!");
+            Environment.Exit(0);
         }
+
+        // Todo: Re-implement external rotation option!
+        if (_appSettings.ProxyMode == Mode.External)
+            Log.Warning(
+                "External proxy rotation feature is under rework and not available for use right now. Internal rotation mode will be used!");
         else
+            Log.Information("Using {mode} rotation mode. The proxy rotation will be handled by TryInventories!",
+                _appSettings.ProxyMode);
+
+        try
         {
-            _logger.LogInformation("Mode: SelfRotated => Proxy rotation is handled by the software!");
-
-            _logger.LogInformation("Getting WebShare profile details...");
-
-            try
-            {
-                var profileData = GetWebShareProfileDetails().Result;
-                _logger.LogInformation("Using services as ({id}) {first} {last} -> {email}!", profileData.Id,
+            var profileData = GetProfileData().Result;
+            if (profileData == null)
+                Log.Warning("Profile data can't be retrieved!");
+            else
+                Log.Information("The API key belongs to the following user: ({id}) {first} {last} -> {email}! \n" +
+                                "This API key will be used for using WebShare's API services which is required by the program to work correctly.",
+                    profileData.Id,
                     profileData.FirstName, profileData.LastName, profileData.Email);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Failed to retrieve profile details! It mainly caused by the wrong API key. Please check it!");
-                return;
-            }
 
-            _logger.LogInformation("Loading proxies...");
-            LoadProxyPoolAsync().Wait();
+            var proxies = LoadPoolAsync(100, "direct").Result;
 
-            if (_appOptions.ShuffleProxyList)
-            {
-                _logger.LogInformation("Shuffle proxies...");
-                ShufflePool();
-            }
+            var pool = new ProxyPool(proxies);
+            if (_appSettings.ShuffleProxyPool) pool.ShufflePool();
 
-            _logger.LogInformation("For initialization we rotate to the first proxy!");
-            RotateProxy(true);
-            _logger.LogInformation("Initialization completed!");
+            ProxyClient = new ProxyClient(pool);
         }
-    }
-
-    private void ShufflePool()
-    {
-        var random = new Random();
-        for (var i = _proxyPool.Count - 1; i > 0; i--)
+        catch (Exception ex)
         {
-            var j = random.Next(i + 1);
-            (_proxyPool[i], _proxyPool[j]) = (_proxyPool[j], _proxyPool[i]);
-        }
-    }
-
-    public async Task LoadProxyPoolAsync()
-    {
-        var reqString = "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100";
-        var retries = 0;
-        const int max = 3;
-        const int cooldown = 3000;
-
-        while (reqString != null)
-        {
-            retries++;
-
-            _logger.LogInformation("Retrieving proxy chunk...");
-
-            using var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
-            var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
-
-            _logger.LogInformation("Request was sent!");
-
-            try
-            {
-                rsp.EnsureSuccessStatusCode();
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError("Failed to retrieve a proxy list chunk from WebShare! Status: {status}",
-                    rsp.StatusCode);
-
-                if (ex.StatusCode == HttpStatusCode.Unauthorized)
-                {
-                    _logger.LogError("Api credentials are incorrect!");
-                    return;
-                }
-
-                if (max < retries)
-                {
-                    _logger.LogInformation("(Attempt: {retries}) Retrying in {cooldown} seconds...", retries,
-                        cooldown / 1000);
-
-                    await Task.Delay(cooldown);
-                    continue;
-                }
-
-                _logger.LogError("Failed to retrieve proxy list after multiple retries!");
-            }
-
-            _logger.LogInformation("Response arrived! Status: {status}", rsp.StatusCode);
-
-            var content = await rsp.Content.ReadAsStringAsync();
-            var json = JsonSerializer.Deserialize<ProxyListResponse>(content) ??
-                       throw new JsonException("Failed to deserialize the returned proxies from WebShare's API!");
-
-            _logger.LogInformation("Content deserialized!");
-
-            reqString = json.Next;
-            _proxyPool.AddRange(json.Results);
+            Log.Warning(ex,
+                "Failed to retrieve WebShare proxy list! The main causer of the issue is the wrong or unset API key. In this state the software uses the original IP as default!");
         }
 
-        _logger.LogInformation("All proxy has been loaded into cache! We have {proxyCount} proxies total.",
-            _proxyPool.Count);
+        Log.Information("Initialization completed!");
     }
 
-    private async Task<ProfileResponse> GetWebShareProfileDetails()
+    private async Task<ProfileResponse?> GetProfileData()
     {
-        const string reqString = "https://proxy.webshare.io/api/v2/profile/";
-        var reqMsg = new HttpRequestMessage(HttpMethod.Get, reqString);
-        var rsp = await _proxyLoaderClient.SendAsync(reqMsg);
-
-        rsp.EnsureSuccessStatusCode();
-
-        var content = await rsp.Content.ReadAsStringAsync();
-        var json = JsonSerializer.Deserialize<ProfileResponse>(content) ??
-                   throw new JsonException("Failed to deserialize the response from WebShare API!");
-
-        return json;
+        return await new UserInfoEndpointMessage().Call<ProfileResponse>(_webShareClient);
     }
 
-    public async Task<HttpResponseMessage> SendAutoRotatedProxiedMessage(HttpRequestMessage req)
+    public async Task<List<ProxyEntry>> LoadPoolAsync(int chunkSize, string mode)
     {
-        var maxRetry = _appOptions.AutoRotatedProxySettings.MaxRetryPerRequest;
-        var delay = _appOptions.AutoRotatedProxySettings.RetryDelay;
-        var attempt = 0;
+        var loadCache = new List<ProxyEntry>();
+        bool hasNext;
+        var page = 1;
 
-        HttpResponseMessage rsp;
+        Log.Information("Started loading proxy list with page size of {pageSize} and mode {mode}!", chunkSize, mode);
+
         do
         {
-            var cloneReq = new HttpRequestMessage
+            Log.Information("Page - | {page} | Chunk size - {chunkSize}/req", page, chunkSize);
+            var rsp = await new ProxyListEndpointMessage
             {
-                Content = req.Content,
-                Method = req.Method,
-                Version = req.Version,
-                RequestUri = req.RequestUri,
-                VersionPolicy = req.VersionPolicy
-            };
+                Mode = mode,
+                Page = page,
+                PageSize = chunkSize
+            }.Call<ProxyListResponse>(_webShareClient);
 
-            rsp = await _proxyClient.SendAsync(cloneReq);
+            Log.Information("Chunk arrived!");
 
-            try
-            {
-                rsp.EnsureSuccessStatusCode();
-                break;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "Proxied call did not indicated success! Retrying call in {delay} second(s)...",
-                    delay / 1000);
-                attempt++;
+            loadCache.AddRange(rsp.Results);
+            Log.Information("Cached {count} proxies! {actual}/{total}", rsp.Results.Count, loadCache.Count, rsp.Count);
 
-                await Task.Delay(delay);
-            }
-        } while (attempt < maxRetry);
+            hasNext = rsp.Next != null;
+            page++;
+        } while (hasNext);
 
-        if (attempt == maxRetry)
-            _logger.LogError(
-                "We have reached the maximum allowed retry count for this request! Returning last response message...");
+        Log.Information("All proxy retrieved! Proxy count: {finalCount}", loadCache.Count);
 
-        return rsp;
-    }
-
-    public async Task<HttpResponseMessage> SendSelfRotatedProxiedMessage(HttpRequestMessage req)
-    {
-        var maxRotates = _appOptions.SelfRotatedProxySettings.MaxRotatePerRequest;
-        var rotated = 0;
-
-        HttpResponseMessage rsp;
-        do
-        {
-            var cloneReq = new HttpRequestMessage
-            {
-                Content = req.Content,
-                Method = req.Method,
-                Version = req.Version,
-                RequestUri = req.RequestUri,
-                VersionPolicy = req.VersionPolicy
-            };
-
-            rsp = await _proxyClient.SendAsync(cloneReq);
-
-            try
-            {
-                rsp.EnsureSuccessStatusCode();
-                break;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(ex, "Proxied call did not indicated success! Rotating proxy and retrying...");
-
-                RotateProxy();
-                rotated++;
-            }
-        } while (rotated < maxRotates);
-
-        if (rotated == maxRotates)
-            _logger.LogError(
-                "We have reached the maximum allowed rotate count for a request! Returning last response message...");
-
-        return rsp;
-    }
-
-    private void RotateProxy(bool init = false)
-    {
-        if (!init)
-            _currentProxyIndex++;
-
-        if (_currentProxyIndex >= _proxyPool.Count)
-        {
-            _logger.LogInformation("Reaching end of the proxy list. Resetting to 0...");
-            _currentProxyIndex = 0;
-        }
-
-        var selectedProxy = _proxyPool[_currentProxyIndex];
-        _logger.LogInformation("New proxy picked -> ID: {id} | {location} => {fullAddress} | Valid? {valid}",
-            selectedProxy.Id, $"{selectedProxy.CountryCode} ({selectedProxy.CityName})",
-            $"{selectedProxy.ProxyAddress}:{selectedProxy.Port}", selectedProxy.Valid);
-
-        var proxy = new WebProxy
-        {
-            Address = new Uri($"http://{selectedProxy.ProxyAddress}:{selectedProxy.Port}"),
-            Credentials = new NetworkCredential(selectedProxy.Username, selectedProxy.Password)
-        };
-
-        _proxyClient.Dispose();
-
-        _proxyClient = new HttpClient(new HttpClientHandler
-        {
-            Proxy = proxy,
-            UseProxy = true
-        });
-
-        _logger.LogInformation("Proxy successfully set!");
+        return loadCache;
     }
 }

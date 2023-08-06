@@ -1,79 +1,102 @@
-﻿using System.Net.Http.Headers;
+﻿using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
+using System.Web;
 
 namespace TryInventories.WebShareApi;
 
-public class WebShareClient
+public class WebShareClient : IDisposable
 {
-    private readonly HttpClient _webShareClient;
+    private readonly CancellationTokenSource _cancellationToken;
+    private readonly HttpClient _client;
 
     public WebShareClient(string webShareApiKey)
     {
-        _webShareClient = new HttpClient
+        _client = new HttpClient
         {
             DefaultRequestHeaders =
             {
                 Authorization = new AuthenticationHeaderValue("Token", webShareApiKey)
             },
-
             Timeout = TimeSpan.FromSeconds(30)
         };
+
+        _cancellationToken = new CancellationTokenSource();
     }
 
-    private static string ParseQueryParams(object queryParams)
+    public void Dispose()
     {
-        var properties = queryParams.GetType().GetProperties();
-        var dict = properties.ToDictionary(k => k.Name, v => v.GetValue(queryParams)?.ToString() ?? "");
-
-        var str = new FormUrlEncodedContent(dict).ReadAsStringAsync().Result;
-
-        return str;
+        _client.Dispose();
+        _cancellationToken.Dispose();
     }
 
-    private static string StringifyBody(object body)
+    private async Task<HttpResponseMessage> CallRaw(WebShareEndpoint endpoint)
     {
-        return JsonSerializer.Serialize(body);
-    }
+        const int max = 10;
+        var attempt = 0;
+        var delay = 1000;
 
-    private static T ParseContent<T>(string content)
-    {
-        var json = JsonSerializer.Deserialize<T>(content);
-
-        return json ?? throw new JsonException("Failed to deserialize the content input!");
-    }
-
-    public async Task<T> InvokeApiAsync<T>(IWebShareEndpoint request)
-    {
-        var req = new HttpRequestMessage(request.GetMethod(), request.GetUri());
-
-        var body = request.GetBody();
-        if (body != null) req.Content = new StringContent(StringifyBody(body));
-
-        var qp = request.GetQueryParams();
-        if (qp != null)
+        HttpResponseMessage? response;
+        do
         {
-            var ub = new UriBuilder(request.GetUri())
+            var queryDict = endpoint.QueryParams;
+
+            var queryStr = ParseQueryStr(queryDict);
+            var uriStr = endpoint.EndpointUrl;
+
+            if (queryStr != null) uriStr += $"?{queryStr}";
+
+            using var reqMsg = new HttpRequestMessage(endpoint.Method, new Uri(uriStr));
+
+            if (endpoint.Body != null)
             {
-                Query = ParseQueryParams(qp)
-            };
+                var jsonString = JsonSerializer.Serialize(endpoint.Body);
+                reqMsg.Content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+            }
 
-            req.RequestUri = new Uri(ub.ToString());
-        }
+            response = await _client.SendAsync(reqMsg, _cancellationToken.Token);
+            if (response.IsSuccessStatusCode) break;
 
-        var rsp = await _webShareClient.SendAsync(req);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                throw new HttpRequestException(
+                    $"The response returned {response.StatusCode} which mainly caused by invalid API key. Please check it!");
 
-        try
-        {
-            rsp.EnsureSuccessStatusCode();
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new HttpRequestException("There was an error while we invoked a WebShare endpoint.", ex);
-        }
+            await Task.Delay(delay);
+            attempt++;
+            delay += 1000;
+        } while (attempt <= max);
 
-        var rspContent = await rsp.Content.ReadAsStringAsync();
-        var json = ParseContent<T>(rspContent);
+        return response ?? throw new InvalidOperationException("The response was NULL!");
+    }
 
-        return json;
+    public async Task<string> Call(WebShareEndpoint endpoint)
+    {
+        var rawCall = await CallRaw(endpoint);
+        var contentStr = await rawCall.Content.ReadAsStringAsync();
+
+        return contentStr;
+    }
+
+    public async Task<T> Call<T>(WebShareEndpoint endpoint)
+    {
+        var rawCall = await CallRaw(endpoint);
+        var contentStr = await rawCall.Content.ReadAsStringAsync();
+        return ToObj<T>(contentStr);
+    }
+
+    private static T ToObj<T>(string jsonString)
+    {
+        var obj = JsonSerializer.Deserialize<T>(jsonString);
+        return obj ?? throw new JsonException($"{nameof(obj)} was null after deserialization!");
+    }
+
+    private static string? ParseQueryStr(Dictionary<string, string>? queryDictionary)
+    {
+        if (queryDictionary == null || queryDictionary.Count == 0) return null;
+        var queryString = HttpUtility.ParseQueryString(string.Empty);
+        foreach (var kvp in queryDictionary) queryString[kvp.Key] = kvp.Value;
+
+        return queryString.ToString();
     }
 }
