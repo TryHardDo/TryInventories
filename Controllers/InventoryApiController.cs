@@ -52,6 +52,7 @@ public class InventoryApiController : Controller
             // Todo: Re-implement the conditional request strategy when it is ready
             using var response = await _steamProxy.ProxyClient.SendAsync(request);
 
+            if (response == null) return StatusCode(500);
             if (!response.IsSuccessStatusCode) return StatusCode((int)response.StatusCode);
 
             var responseStr = await response.Content.ReadFromJsonAsync<object>() ??
