@@ -93,10 +93,20 @@ public class ProxyClient : IDisposable
 
     private void RotateProxyClient()
     {
-        Pool.Rotate();
-        Client.Dispose();
+        var useOwnIp = false;
 
-        Client = GetNewClient();
+        try
+        {
+            Pool.Rotate();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "An error occurred at proxy rotation! Using own ip for inventory retrieving!");
+            useOwnIp = true;
+        }
+
+        Client.Dispose();
+        Client = GetNewClient(useOwnIp);
     }
 
     private WebProxy? GetWebProxy()
@@ -111,13 +121,13 @@ public class ProxyClient : IDisposable
         };
     }
 
-    private HttpClient GetNewClient()
+    private HttpClient GetNewClient(bool useOwnIp = false)
     {
         var proxy = GetWebProxy();
         return new HttpClient(new HttpClientHandler
         {
             Proxy = proxy,
-            UseProxy = proxy != null
+            UseProxy = proxy != null && !useOwnIp
         }, true)
         {
             Timeout = TimeSpan.FromSeconds(Timeout)
