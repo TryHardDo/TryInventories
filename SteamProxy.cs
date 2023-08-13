@@ -57,7 +57,7 @@ public class SteamProxy
             var proxies = LoadPoolAsync(100, "direct").Result;
 
             var pool = new ProxyPool(proxies);
-            if (_appSettings.ShuffleProxyPool) pool.ShufflePool();
+            if (_appSettings.ShuffleProxyPool) pool.ShufflePoolV2();
 
             ProxyClient = new ProxyClient(pool);
         }

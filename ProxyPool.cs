@@ -33,6 +33,7 @@ public class ProxyPool
         }
     }
 
+    [Obsolete("This method is not used anymore. Use ShufflePoolV2() instead!")]
     public void ShufflePool()
     {
         var poolList = Pool.ToList();
@@ -44,6 +45,12 @@ public class ProxyPool
         }
 
         Pool = poolList.ToHashSet();
+    }
+
+    public void ShufflePoolV2()
+    {
+        var random = new Random();
+        SelectedIndex = random.Next(0, Pool.Count - 1);
     }
 
     public ProxyEntry? GetSelected()
