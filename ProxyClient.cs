@@ -5,16 +5,18 @@ namespace TryInventories;
 
 public class ProxyClient : IDisposable
 {
-    public ProxyClient(ProxyPool pool, int maxRotates = 10)
+    public ProxyClient(ProxyPool pool, int maxRotates = 10, int timeout = 5)
     {
         Pool = pool;
         Client = GetNewClient();
         MaxRotates = maxRotates;
+        Timeout = timeout;
     }
 
     public ProxyPool Pool { get; private set; }
     private HttpClient Client { get; set; }
     private int MaxRotates { get; }
+    private int Timeout { get; }
 
     public void Dispose()
     {
@@ -45,9 +47,20 @@ public class ProxyClient : IDisposable
                 rsp.EnsureSuccessStatusCode();
                 break;
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
-                Log.Warning(ex, "Call did not indicate success.");
+                switch (ex)
+                {
+                    case HttpRequestException:
+                        Log.Warning(ex, "Call did not indicate success.");
+                        break;
+                    case TaskCanceledException:
+                        Log.Warning(ex, "The request was canceled due to timeout limitation!");
+                        break;
+                    default:
+                        Log.Error(ex, "An unexpected error happened during proxied call to Steam!");
+                        return rsp;
+                }
 
                 if (Pool.GetSelected() == null)
                 {
@@ -56,7 +69,7 @@ public class ProxyClient : IDisposable
                     return rsp;
                 }
 
-                Log.Information("Rotating to the next proxy...");
+                Log.Information("Picking new proxy from the pool...");
 
                 RotateProxyClient();
                 rotations++;
@@ -105,7 +118,10 @@ public class ProxyClient : IDisposable
         {
             Proxy = proxy,
             UseProxy = proxy != null
-        });
+        }, true)
+        {
+            Timeout = TimeSpan.FromSeconds(Timeout)
+        };
     }
 
     ~ProxyClient()
