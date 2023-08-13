@@ -24,9 +24,9 @@ public class ProxyClient : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage requestMessage)
+    public async Task<HttpResponseMessage?> SendAsync(HttpRequestMessage requestMessage)
     {
-        HttpResponseMessage rsp;
+        HttpResponseMessage? rsp = null;
         var rotations = 1;
 
         do
