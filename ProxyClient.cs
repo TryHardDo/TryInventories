@@ -8,15 +8,15 @@ public class ProxyClient : IDisposable
     public ProxyClient(ProxyPool pool, int maxRotates = 10, int timeout = 5)
     {
         Pool = pool;
+        RequestTimeout = timeout;
         Client = GetNewClient();
         MaxRotates = maxRotates;
-        Timeout = timeout;
     }
 
     public ProxyPool Pool { get; private set; }
     private HttpClient Client { get; set; }
     private int MaxRotates { get; }
-    private int Timeout { get; }
+    private int RequestTimeout { get; }
 
     public void Dispose()
     {
@@ -69,8 +69,9 @@ public class ProxyClient : IDisposable
                     return rsp;
                 }
 
-                Log.Information("Picking new proxy from the pool...");
+                Log.Information("Rotating to the new proxy and blacklisting the current one...");
 
+                Pool.BlackListCurrent();
                 RotateProxyClient();
                 rotations++;
             }
@@ -130,7 +131,7 @@ public class ProxyClient : IDisposable
             UseProxy = proxy != null && !useOwnIp
         }, true)
         {
-            Timeout = TimeSpan.FromSeconds(Timeout)
+            Timeout = TimeSpan.FromSeconds(RequestTimeout)
         };
     }
 
