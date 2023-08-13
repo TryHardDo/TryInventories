@@ -6,17 +6,16 @@ public class ProxyPool
 {
     public ProxyPool()
     {
-        Pool = new HashSet<ProxyEntry>();
     }
 
     public ProxyPool(IEnumerable<ProxyEntry> entries)
     {
-        Pool = new HashSet<ProxyEntry>();
         AddAll(entries);
     }
 
-    private HashSet<ProxyEntry> Pool { get; set; }
+    private HashSet<ProxyEntry> Pool { get; set; } = new();
     public int SelectedIndex { get; private set; }
+    private readonly Dictionary<string, DateTime> _blackList = new();
 
     public void Add(ProxyEntry entry)
     {
@@ -31,6 +30,45 @@ public class ProxyPool
             if (Pool.Contains(proxyEntry)) continue;
             Pool.Add(proxyEntry);
         }
+    }
+
+    /// <summary>
+    /// Determines whether a proxy is blacklisted and if its time value is still within
+    /// the defined expiration threshold.
+    /// </summary>
+    /// <param name="entry">The proxy entry to be checked.</param>
+    /// <param name="threshold">The threshold time in minutes.</param>
+    /// <returns>
+    ///   <c>true</c> if the address is on the blacklist and has not exceeded the 
+    ///   specified threshold; otherwise, <c>false</c>.
+    /// </returns>
+    public bool IsBlackListed(ProxyEntry entry, int threshold = 30)
+    {
+        var address = $"{entry.ProxyAddress}:{entry.Port}";
+        return _blackList.ContainsKey(address) && _blackList[address].AddMinutes(threshold) > DateTime.UtcNow;
+    }
+
+    public void RemoveFromBlackListCurrent()
+    {
+        var selected = GetSelected();
+        if (selected == null) return;
+        var address = $"{selected.ProxyAddress}:{selected.Port}";
+        if (!_blackList.ContainsKey(address)) return;
+        _blackList.Remove(address);
+    }
+
+    public void BlackListCurrent()
+    {
+        var selected = GetSelected();
+        if (selected == null) return;
+        var address = $"{selected.ProxyAddress}:{selected.Port}";
+        if (_blackList.ContainsKey(address))
+        {
+            _blackList[address] = DateTime.UtcNow;
+            return;
+        }
+
+        _blackList.Add(address, DateTime.UtcNow);
     }
 
     [Obsolete("This method is not used anymore. Use ShufflePoolV2() instead!")]
@@ -60,10 +98,28 @@ public class ProxyPool
 
     public int Rotate()
     {
-        if (SelectedIndex + 1 >= Pool.Count)
-            SelectedIndex = 0;
-        else
-            SelectedIndex++;
+        var loopCount = 0;
+
+        while (loopCount < Pool.Count - 1)
+        {
+            if (SelectedIndex + 1 >= Pool.Count)
+            {
+                SelectedIndex = 0;
+            }
+            else
+            {
+                SelectedIndex++;
+            }
+
+            if (IsBlackListed(GetSelected() ?? throw new InvalidOperationException("Rotation not possible with no elements inside the pool!")))
+            {
+                loopCount++;
+                continue;
+            }
+
+            RemoveFromBlackListCurrent();
+            break;
+        }
 
         return SelectedIndex;
     }
