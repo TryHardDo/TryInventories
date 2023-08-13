@@ -40,10 +40,9 @@ public class ProxyClient : IDisposable
                 VersionPolicy = requestMessage.VersionPolicy
             };
 
-            rsp = await Client.SendAsync(cloneReq);
-
             try
             {
+                rsp = await Client.SendAsync(cloneReq);
                 rsp.EnsureSuccessStatusCode();
                 break;
             }
