@@ -111,7 +111,7 @@ public class ProxyPool
                 SelectedIndex++;
             }
 
-            if (IsBlackListed(GetSelected() ?? throw new InvalidOperationException("Rotation not possible with no elements inside the pool!")))
+            if (IsBlackListed(GetSelected() ?? throw new InvalidOperationException("Rotation not possible: No elements found inside the pool!")))
             {
                 loopCount++;
                 continue;
@@ -120,6 +120,8 @@ public class ProxyPool
             RemoveFromBlackListCurrent();
             break;
         }
+
+        if (loopCount == Pool.Count - 1) throw new InvalidOperationException("Rotation not possible: All elements are on black list!");
 
         return SelectedIndex;
     }
