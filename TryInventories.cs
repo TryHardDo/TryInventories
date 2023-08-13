@@ -8,7 +8,7 @@ namespace TryInventories;
 internal class TryInventories
 {
     internal const string Author = "Levai Levente @ TryHardDo";
-    internal static readonly Version Version = new(1, 1, 3);
+    internal static readonly Version Version = new(1, 1, 4,0);
 
     private static void Main(string[] args)
     {
@@ -20,7 +20,7 @@ internal class TryInventories
             .Enrich.FromLogContext()
             .CreateLogger();
 
-        Log.Information("TryInventories - Steam inventory loader");
+        Log.Information("TryInventories - Solution for Steam rate limits");
         Log.Information("Developed by: {Author} | Version: {Version}", Author, Version);
         Log.Information("Starting software...");
 
