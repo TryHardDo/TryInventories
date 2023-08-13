@@ -11,7 +11,7 @@ public record ProfileResponse(
     [property: JsonPropertyName("last_name")]
     string LastName,
     [property: JsonPropertyName("last_login")]
-    DateTime LastLogin,
+    DateTime? LastLogin,
     [property: JsonPropertyName("timezone")]
     string Timezone,
     [property: JsonPropertyName("subscribed_bandwidth_usage_notifications")]
