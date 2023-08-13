@@ -4,6 +4,8 @@ namespace TryInventories;
 
 public class ProxyPool
 {
+    private readonly Dictionary<string, DateTime> _blackList = new();
+
     public ProxyPool()
     {
     }
@@ -15,7 +17,6 @@ public class ProxyPool
 
     private HashSet<ProxyEntry> Pool { get; set; } = new();
     public int SelectedIndex { get; private set; }
-    private readonly Dictionary<string, DateTime> _blackList = new();
 
     public void Add(ProxyEntry entry)
     {
@@ -33,14 +34,14 @@ public class ProxyPool
     }
 
     /// <summary>
-    /// Determines whether a proxy is blacklisted and if its time value is still within
-    /// the defined expiration threshold.
+    ///     Determines whether a proxy is blacklisted and if its time value is still within
+    ///     the defined expiration threshold.
     /// </summary>
     /// <param name="entry">The proxy entry to be checked.</param>
     /// <param name="threshold">The threshold time in minutes.</param>
     /// <returns>
-    ///   <c>true</c> if the address is on the blacklist and has not exceeded the 
-    ///   specified threshold; otherwise, <c>false</c>.
+    ///     <c>true</c> if the address is on the blacklist and has not exceeded the
+    ///     specified threshold; otherwise, <c>false</c>.
     /// </returns>
     public bool IsBlackListed(ProxyEntry entry, int threshold = 30)
     {
@@ -103,15 +104,13 @@ public class ProxyPool
         while (loopCount < Pool.Count - 1)
         {
             if (SelectedIndex + 1 >= Pool.Count)
-            {
                 SelectedIndex = 0;
-            }
             else
-            {
                 SelectedIndex++;
-            }
 
-            if (IsBlackListed(GetSelected() ?? throw new InvalidOperationException("Rotation not possible: No elements found inside the pool!")))
+            if (IsBlackListed(GetSelected() ??
+                              throw new InvalidOperationException(
+                                  "Rotation not possible: No elements found inside the pool!")))
             {
                 loopCount++;
                 continue;
@@ -121,7 +120,8 @@ public class ProxyPool
             break;
         }
 
-        if (loopCount == Pool.Count - 1) throw new InvalidOperationException("Rotation not possible: All elements are on black list!");
+        if (loopCount == Pool.Count - 1)
+            throw new InvalidOperationException("Rotation not possible: All elements are on black list!");
 
         return SelectedIndex;
     }
