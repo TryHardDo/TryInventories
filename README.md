@@ -75,8 +75,7 @@ Holds internal mode related settings. If __ProxyMode__ is set to `External` thes
     - __RetryDelay__: The delay beetwen request retries in ___MILLISECONDS___. So if you want 3 seconds of delay then `3 * 1000`.
 
 - __AccessToken__: This is like a simple API key to access to the endpoint by this software. It is for those users who are using it in non-localhost network enviroment.
-This is an `optional` value. If you keep it empty `""` then it won't autheticate request. If you are running the software on `localhost` then you can keep it empty since nobody can access to the API in this case only if you set
-up a reverse proxy by yourself but this is your fault then :D.
+This is NOT an `optional` value. If you keep it empty `""` then autobot side won't send inventory requests trough the proxy. Make sure this value is the same as you defined in the `ecosystem.json`!
 
  Note that the `"AccessToken"` is used to set the API key, which is required when sending a request to our endpoint. So when we will configure the autobot side of the
  program this key will be used in your `ecosystem.json` to set the API key of the alternative inventory source!
