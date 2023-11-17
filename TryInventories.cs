@@ -8,7 +8,7 @@ namespace TryInventories;
 internal class TryInventories
 {
     internal const string Author = "Levai Levente @ TryHardDo";
-    internal static readonly Version Version = new(1, 1, 4, 0);
+    internal static readonly Version Version = new(1, 1, 5, 0);
 
     private static void Main(string[] args)
     {
