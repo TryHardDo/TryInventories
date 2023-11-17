@@ -55,7 +55,8 @@ public class VersionChecker : IHostedService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Version check failed due to an error. You can ignore this message if you are running the latest release!");
+            _logger.LogWarning(ex,
+                "Version check failed due to an error. You can ignore this message if you are running the latest release!");
         }
     }
 
