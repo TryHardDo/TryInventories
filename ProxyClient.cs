@@ -5,9 +5,10 @@ namespace TryInventories;
 
 public class ProxyClient : IDisposable
 {
-    public ProxyClient(ProxyPool pool, int maxRotates = 10)
+    public ProxyClient(ProxyPool pool, int maxRotates = 10, int timeout = 5)
     {
         Pool = pool;
+        RequestTimeout = timeout;
         Client = GetNewClient();
         MaxRotates = maxRotates;
     }
@@ -15,6 +16,7 @@ public class ProxyClient : IDisposable
     public ProxyPool Pool { get; private set; }
     private HttpClient Client { get; set; }
     private int MaxRotates { get; }
+    private int RequestTimeout { get; }
 
     public void Dispose()
     {
@@ -22,9 +24,9 @@ public class ProxyClient : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage requestMessage)
+    public async Task<HttpResponseMessage?> SendAsync(HttpRequestMessage requestMessage)
     {
-        HttpResponseMessage rsp;
+        HttpResponseMessage? rsp = null;
         var rotations = 1;
 
         do
@@ -38,16 +40,26 @@ public class ProxyClient : IDisposable
                 VersionPolicy = requestMessage.VersionPolicy
             };
 
-            rsp = await Client.SendAsync(cloneReq);
-
             try
             {
+                rsp = await Client.SendAsync(cloneReq);
                 rsp.EnsureSuccessStatusCode();
                 break;
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
-                Log.Warning(ex, "Call did not indicate success.");
+                switch (ex)
+                {
+                    case HttpRequestException:
+                        Log.Warning(ex, "Call did not indicate success.");
+                        break;
+                    case TaskCanceledException:
+                        Log.Warning(ex, "The request was canceled due to timeout limitation!");
+                        break;
+                    default:
+                        Log.Error(ex, "An unexpected error happened during proxied call to Steam!");
+                        return rsp;
+                }
 
                 if (Pool.GetSelected() == null)
                 {
@@ -56,8 +68,9 @@ public class ProxyClient : IDisposable
                     return rsp;
                 }
 
-                Log.Information("Rotating to the next proxy...");
+                Log.Information("Rotating to the new proxy and blacklisting the current one...");
 
+                Pool.BlackListCurrent();
                 RotateProxyClient();
                 rotations++;
             }
@@ -80,10 +93,20 @@ public class ProxyClient : IDisposable
 
     private void RotateProxyClient()
     {
-        Pool.Rotate();
-        Client.Dispose();
+        var useOwnIp = false;
 
-        Client = GetNewClient();
+        try
+        {
+            Pool.Rotate();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "An error occurred at proxy rotation! Using own ip for inventory retrieving!");
+            useOwnIp = true;
+        }
+
+        Client.Dispose();
+        Client = GetNewClient(useOwnIp);
     }
 
     private WebProxy? GetWebProxy()
@@ -98,14 +121,17 @@ public class ProxyClient : IDisposable
         };
     }
 
-    private HttpClient GetNewClient()
+    private HttpClient GetNewClient(bool useOwnIp = false)
     {
         var proxy = GetWebProxy();
         return new HttpClient(new HttpClientHandler
         {
             Proxy = proxy,
-            UseProxy = proxy != null
-        });
+            UseProxy = proxy != null && !useOwnIp
+        }, true)
+        {
+            Timeout = TimeSpan.FromSeconds(RequestTimeout)
+        };
     }
 
     ~ProxyClient()

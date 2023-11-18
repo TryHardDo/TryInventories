@@ -40,7 +40,7 @@ public class ProxyUpdater : IHostedService
                 var proxies = _steamProxy.LoadPoolAsync(100, "direct").Result;
                 var pool = new ProxyPool(proxies);
 
-                if (_settings.ShuffleProxyPool) pool.ShufflePool();
+                if (_settings.ShuffleProxyPool) pool.ShufflePoolV2();
 
                 _steamProxy.ProxyClient.SwapPool(pool);
 

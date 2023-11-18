@@ -28,27 +28,35 @@ public class VersionChecker : IHostedService
 
     private async void CheckVersionAsync(bool first = false)
     {
-        var releases = await _gitHubClient.Repository.Release.GetAll("TryHardDo", "TryInventories");
-
-        if (releases.Count <= 0) return;
-
-        var latestRelease = releases[0];
-        var currentVersion = TryInventories.Version;
-        var latestVersion = new Version(latestRelease.TagName);
-
-        if (currentVersion < latestVersion)
+        try
         {
-            _logger.LogWarning(
-                "A new {keyword} is available! Current: {current} => Latest: {latest} | Pull the new version if you are running it inside Docker or download the new builds from here: {uri}",
-                latestRelease.Prerelease ? "Pre-release" : "Release", currentVersion,
-                latestVersion, latestRelease.HtmlUrl);
+            var releases = await _gitHubClient.Repository.Release.GetAll("TryHardDo", "TryInventories");
+
+            if (releases.Count <= 0) return;
+
+            var latestRelease = releases[0];
+            var currentVersion = TryInventories.Version;
+            var latestVersion = new Version(latestRelease.TagName);
+
+            if (currentVersion < latestVersion)
+            {
+                _logger.LogWarning(
+                    "A new {keyword} is available! Current: {current} => Latest: {latest} | Pull the new version if you are running it inside Docker or download the new builds from here: {uri}",
+                    latestRelease.Prerelease ? "Pre-release" : "Release", currentVersion,
+                    latestVersion, latestRelease.HtmlUrl);
+            }
+            else
+            {
+                if (first)
+                    _logger.LogInformation(
+                        "You are running the latest version of the software! Current: {current} | Latest: {latest}",
+                        currentVersion, latestVersion);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            if (first)
-                _logger.LogInformation(
-                    "You are running the latest version of the software! Current: {current} | Latest: {latest}",
-                    currentVersion, latestVersion);
+            _logger.LogWarning(ex,
+                "Version check failed due to an error. You can ignore this message if you are running the latest release!");
         }
     }
 
