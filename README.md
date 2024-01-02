@@ -1,6 +1,6 @@
 # 📦 TryInventories
 TryInventories is an ASP.NET Core based RESTApi that communicates with Steam's inventory endpoint through a proxy. It provides a simple yet efficient way to retrieve Steam inventory contents and bypass rate limits.
-> The pogram only works with [WebShare](https://www.webshare.io/?referral_code=tet73fy7n7vb) proxies! Other proxy providers does not have supported yet!
+> The program only works with [WebShare](https://www.webshare.io/?referral_code=tet73fy7n7vb) proxies! Other proxy providers does not have support yet!
 
 You can find the autobot implementation of the api [here](https://github.com/TryHardDo/tf2autobot/tree/try-inventories). Here you can find the description how you can implement
 the code into your code base even if you have customized parts in your code.
