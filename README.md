@@ -60,9 +60,9 @@ use you proxies always in the same order to preven exhausted proxies. If you set
 
 - __InternalRotationSettings__:
 Holds internal mode related settings. If __ProxyMode__ is set to `External` these settings will be ignored.
-    - __WebShareApiKey__: The WebShare API key which is used to retrieve the proxy list from aour account. You can find your _WebShare API key(s)_ [here](https://proxy2.webshare.io/userapi/keys) or you can make a new one if there is no existing one.
-    - __RotationThreshold__: The maximum rotate amount which is allowed per request. If the rotation count reache this number it returns the last response.
-    - __DoScheduledPoolSync__: If it is set to true it is atomatically refreshes your pool in a set intervall!
+    - __WebShareApiKey__: The WebShare API key which is used to retrieve the proxy list from your account. You can find your _WebShare API key(s)_ [here](https://proxy2.webshare.io/userapi/keys) or you can make a new one.
+    - __RotationThreshold__: The maximum proxy rotation amount allowed/request. If the rotation count reaches this number it returns the latest response even if it was an error.
+    - __DoScheduledPoolSync__: If it is set to true it is atomatically refreshes your pool in a constant intervall!
     - __PoolSyncInterval__: The syncronization interval in minutes!
 
 - __AutoRotatedProxySettings__: Holds the external related proxy settings. If __ProxyMode__ is set to `Internal` these settings will be ignored.
@@ -72,7 +72,7 @@ Holds internal mode related settings. If __ProxyMode__ is set to `External` thes
     - __Username__: The username of your rotating proxy. It looks like a randomly generated string by default.
     - __Password__: The password of your rotating proxy.
     - __MaxCallRetry__: The maximum retry amount until the software retries sending the request. If all fails it returs the last response from Steam.
-    - __RetryDelay__: The delay beetwen request retries in ___MILLISECONDS___. So if you want 3 seconds of delay then `3 * 1000`.
+    - __RetryDelay__: The delay beetwen request retries in ___MILLISECONDS___. So if you want 3 seconds of delay then you would use `3 * 1000` but make sure you only type numbers here. Mathematical expressions crash the entire software.
 
 - __AccessToken__: This is like a simple API key to access to the endpoint by this software. It is for those users who are using it in non-localhost network enviroment.
 This is NOT an `optional` value. If you keep it empty `""` then autobot side won't send inventory requests trough the proxy. Make sure this value is the same as you defined in the `ecosystem.json`!
